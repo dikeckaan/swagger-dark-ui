@@ -1,0 +1,1240 @@
+openapi: 3.1.0
+
+info:
+  title: Nova Commerce API
+  version: 2.4.0
+  summary: A fictional e-commerce API that exercises every Swagger UI feature.
+  description: |
+    # Nova Commerce API
+
+    Welcome to the **Nova Commerce API** — a fictional but fully interactive API
+    designed to showcase *everything* Swagger UI can render.
+
+    > 💡 **Try it out really works.** Every operation is served by
+    > [httpbin.org](https://httpbin.org), which echoes your request back, so you can
+    > experiment with parameters, bodies, and auth headers and see exactly what was sent.
+
+    ## What's demonstrated here
+
+    | Area | Features |
+    | --- | --- |
+    | Operations | All HTTP methods, deprecation, operation-level `externalDocs` |
+    | Parameters | `path`, `query`, `header`, `cookie` — styles, explode, `deepObject` |
+    | Bodies | JSON, form-urlencoded, `multipart` file upload, XML, plain text |
+    | Schemas | `oneOf` / `anyOf` / `allOf`, discriminator, recursion, `readOnly` / `writeOnly` |
+    | Responses | Multiple status codes, response headers, content negotiation, links |
+    | Async | Callbacks and OpenAPI 3.1 webhooks |
+    | Security | API key ×3, HTTP Basic, Bearer JWT, OAuth 2.0, OpenID Connect |
+
+    ## Quick start
+
+    ```bash
+    curl -X POST "https://httpbin.org/anything/users" \
+      -H "Content-Type: application/json" \
+      -H "X-API-Key: demo-key-123" \
+      -d '{"username": "ada", "email": "ada@example.com"}'
+    ```
+
+    ---
+
+    Made with 🌙 for the [Swagger Dark UI](https://github.com/kaandikec/swagger-dark-ui) showcase.
+  termsOfService: https://example.com/terms
+  contact:
+    name: Nova API Team
+    url: https://example.com/support
+    email: api@example.com
+  license:
+    name: Apache 2.0
+    identifier: Apache-2.0
+
+externalDocs:
+  description: Nova Commerce developer portal
+  url: https://swagger.io/tools/swagger-ui/
+
+servers:
+  - url: https://httpbin.org/anything
+    description: Echo server — every request returns a mirror of what you sent
+  - url: https://{region}.httpbin.org/anything
+    description: Regional echo server (demonstrates server variables)
+    variables:
+      region:
+        default: eu
+        enum: [eu, us, ap]
+        description: Geographic region of the API cluster
+
+tags:
+  - name: Users
+    description: Create, read, update, and delete **user accounts**. Demonstrates JSON bodies, named examples, links, and all CRUD methods.
+    externalDocs:
+      description: User model guide
+      url: https://example.com/docs/users
+  - name: Orders
+    description: Order management. Demonstrates polymorphism (`oneOf` + discriminator), callbacks, and response headers.
+  - name: Files
+    description: File upload and download. Demonstrates `multipart/form-data`, binary payloads, and `application/octet-stream`.
+  - name: Search
+    description: Query parameter styles — `form`, `pipeDelimited`, `deepObject`, and friends.
+  - name: Auth
+    description: Endpoints protected by each security scheme, so you can try the **Authorize** dialog with every flavor.
+  - name: Legacy
+    description: Deprecated operations kept for backwards compatibility.
+
+security:
+  - ApiKeyHeader: []
+
+paths:
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: |
+        Returns a paginated list of users.
+
+        Supports **filtering**, **sorting**, and **pagination** via query parameters.
+      operationId: listUsers
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: sort
+          in: query
+          description: Sort field and direction
+          schema:
+            type: string
+            enum: [createdAt:asc, createdAt:desc, username:asc, username:desc]
+            default: createdAt:desc
+        - name: X-Request-Id
+          in: header
+          description: Optional client-generated correlation ID
+          schema:
+            type: string
+            format: uuid
+        - name: session_hint
+          in: cookie
+          description: Opaque session affinity cookie (demonstrates cookie parameters)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A page of users
+          headers:
+            X-RateLimit-Limit:
+              description: Request quota per hour
+              schema:
+                type: integer
+              example: 1000
+            X-RateLimit-Remaining:
+              description: Remaining requests in the current window
+              schema:
+                type: integer
+              example: 998
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags: [Users]
+      summary: Create a user
+      description: |
+        Creates a new user account.
+
+        The request body shows **multiple named examples** — use the *Examples*
+        dropdown to switch between them.
+      operationId: createUser
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        description: The user to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+            examples:
+              minimal:
+                summary: Minimal required fields
+                value:
+                  username: ada
+                  email: ada@example.com
+              full:
+                summary: Every field populated
+                value:
+                  username: grace
+                  email: grace@example.com
+                  fullName: Grace Hopper
+                  birthDate: "1906-12-09"
+                  role: admin
+                  password: "correct horse battery staple"
+                  tags: [pioneer, navy]
+                  address:
+                    street: 1 Compiler Way
+                    city: Arlington
+                    country: US
+                    postalCode: "22201"
+              external:
+                summary: Loaded from an external value
+                description: This example is fetched from a separate JSON file via `externalValue`.
+                externalValue: specs/examples/user-external.json
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '201':
+          description: User created
+          headers:
+            Location:
+              description: URL of the created user
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          links:
+            GetUserById:
+              $ref: '#/components/links/GetUserById'
+            DeleteUser:
+              operationId: deleteUser
+              parameters:
+                userId: $response.body#/id
+              description: The `id` returned in the response can be used to delete the user.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: A user with that username already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        description: Numeric ID of the user
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+        example: 42
+    get:
+      tags: [Users]
+      summary: Get a user by ID
+      description: Fetch a single user. Content negotiation is demonstrated — the response is available as JSON **or** XML.
+      operationId: getUserById
+      responses:
+        '200':
+          description: The requested user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                ada:
+                  $ref: '#/components/examples/AdaUser'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Users]
+      summary: Replace a user
+      description: Full replacement of the user resource. All fields are required.
+      operationId: replaceUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Users]
+      summary: Update a user partially
+      description: |
+        Applies a partial update. Only the provided fields are changed —
+        demonstrated with a schema where **all properties are optional**.
+      operationId: patchUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPatch'
+            example:
+              fullName: Ada Lovelace
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      description: Permanently removes the user. This cannot be undone.
+      operationId: deleteUser
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: User deleted (no content)
+        '404':
+          $ref: '#/components/responses/NotFound'
+    head:
+      tags: [Users]
+      summary: Check if a user exists
+      description: Returns headers only — useful for existence checks (demonstrates the `HEAD` method).
+      operationId: userExists
+      responses:
+        '200':
+          description: User exists
+        '404':
+          description: User not found
+    options:
+      tags: [Users]
+      summary: List allowed methods
+      description: Demonstrates the `OPTIONS` method.
+      operationId: userOptions
+      security: []
+      responses:
+        '204':
+          description: Allowed methods returned in the `Allow` header
+          headers:
+            Allow:
+              schema:
+                type: string
+              example: GET, PUT, PATCH, DELETE, HEAD, OPTIONS
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{userId}/avatar:
+    post:
+      tags: [Files]
+      summary: Upload an avatar image
+      description: |
+        Uploads a profile picture using `multipart/form-data`.
+
+        Swagger UI renders a native **file picker** for the binary part.
+      operationId: uploadAvatar
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The image file (PNG or JPEG, max 5 MB)
+                caption:
+                  type: string
+                  description: Optional caption
+                  maxLength: 140
+                visibility:
+                  type: string
+                  enum: [public, followers, private]
+                  default: public
+            encoding:
+              file:
+                contentType: image/png, image/jpeg
+      responses:
+        '201':
+          description: Avatar uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    examples: ["https://cdn.example.com/avatars/42.png"]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /files/{fileId}:
+    get:
+      tags: [Files]
+      summary: Download a file
+      description: Returns the raw bytes of a stored file (demonstrates `application/octet-stream` responses).
+      operationId: downloadFile
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: File contents
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="report.pdf"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Place an order
+      description: |
+        Creates an order and demonstrates two advanced features:
+
+        1. **Polymorphic payment method** — `paymentMethod` uses `oneOf` with a
+           `discriminator`, so the schema view lets you flip between `card`,
+           `bankTransfer`, and `giftCard`.
+        2. **Callbacks** — if you supply a `callbackUrl`, the API will `POST`
+           order status updates to it. Expand the *Callbacks* section below.
+      operationId: placeOrder
+      security:
+        - OAuth2:
+            - orders:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrder'
+            examples:
+              cardPayment:
+                summary: Pay by card
+                value:
+                  items:
+                    - sku: "NOVA-TEE-M"
+                      quantity: 2
+                  paymentMethod:
+                    kind: card
+                    cardNumber: "4242424242424242"
+                    expiry: "12/28"
+                  callbackUrl: https://client.example.com/webhooks/order-status
+              giftCard:
+                summary: Pay with a gift card
+                value:
+                  items:
+                    - sku: "NOVA-MUG"
+                      quantity: 1
+                  paymentMethod:
+                    kind: giftCard
+                    code: GC-9F8E-7D6C
+      callbacks:
+        orderStatus:
+          '{$request.body#/callbackUrl}':
+            post:
+              summary: Order status notification
+              description: Sent whenever the order transitions to a new status.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OrderStatusEvent'
+              responses:
+                '200':
+                  description: Acknowledged — return 200 to stop retries
+                '410':
+                  description: Endpoint gone — the subscription will be cancelled
+      responses:
+        '201':
+          description: Order placed
+          headers:
+            X-Order-Id:
+              schema:
+                type: string
+                format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '402':
+          description: Payment failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Orders]
+      summary: List orders
+      operationId: listOrders
+      description: Lists orders for the authenticated customer.
+      security:
+        - OAuth2:
+            - orders:read
+      parameters:
+        - name: status
+          in: query
+          description: Filter by one or more statuses (`form` style, exploded)
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/OrderStatus'
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /search:
+    get:
+      tags: [Search]
+      summary: Search the catalog
+      description: |
+        A tour of **query parameter serialization styles**:
+
+        | Parameter | Style | Explode | Example |
+        | --- | --- | --- | --- |
+        | `q` | form | — | `q=mug` |
+        | `ids` | form | false | `ids=1,2,3` |
+        | `colors` | pipeDelimited | false | `colors=red\|blue` |
+        | `filter` | deepObject | true | `filter[price][max]=20` |
+      operationId: searchCatalog
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Free-text query
+          allowEmptyValue: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+          example: coffee mug
+        - name: ids
+          in: query
+          description: Restrict to specific product IDs (comma separated)
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: false
+          example: [101, 102, 103]
+        - name: colors
+          in: query
+          description: Filter by colors (pipe separated)
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [red, green, blue, black, white]
+          style: pipeDelimited
+          explode: false
+        - name: filter
+          in: query
+          description: Structured filter object (`deepObject` style)
+          schema:
+            type: object
+            properties:
+              category:
+                type: string
+              price:
+                type: object
+                properties:
+                  min:
+                    type: number
+                  max:
+                    type: number
+          style: deepObject
+          explode: true
+        - name: includeOutOfStock
+          in: query
+          description: Whether to include unavailable products
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchHit'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/api-key-demo:
+    get:
+      tags: [Auth]
+      summary: Requires an API key
+      description: |
+        Protected by **three interchangeable API key schemes** — header, query, or cookie.
+        Open **Authorize** and set any of them; httpbin echoes the request so you can
+        verify where the key was sent.
+      operationId: apiKeyDemo
+      security:
+        - ApiKeyHeader: []
+        - ApiKeyQuery: []
+        - ApiKeyCookie: []
+      responses:
+        '200':
+          description: Echo of your authenticated request
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/basic-demo:
+    get:
+      tags: [Auth]
+      summary: Requires HTTP Basic auth
+      description: Protected by **HTTP Basic** — Authorize with any username/password and inspect the echoed `Authorization` header.
+      operationId: basicDemo
+      security:
+        - BasicAuth: []
+      responses:
+        '200':
+          description: Echo of your authenticated request
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/bearer-demo:
+    get:
+      tags: [Auth]
+      summary: Requires a Bearer token (JWT)
+      description: Protected by **Bearer / JWT**. Paste any token in the Authorize dialog.
+      operationId: bearerDemo
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Echo of your authenticated request
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/oauth-demo:
+    get:
+      tags: [Auth]
+      summary: Requires OAuth 2.0
+      description: |
+        Protected by **OAuth 2.0** (authorization code + client credentials flows,
+        with scopes). The token endpoints are fictional, so the flow won't complete —
+        it exists to demonstrate the full OAuth UI in the Authorize dialog.
+      operationId: oauthDemo
+      security:
+        - OAuth2:
+            - profile:read
+      responses:
+        '200':
+          description: Echo of your authenticated request
+        '403':
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/openid-demo:
+    get:
+      tags: [Auth]
+      summary: Requires OpenID Connect
+      description: Protected by **OpenID Connect** discovery (fictional issuer).
+      operationId: openIdDemo
+      security:
+        - OpenId:
+            - openid
+      responses:
+        '200':
+          description: Echo of your authenticated request
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notes:
+    post:
+      tags: [Search]
+      summary: Create a plain-text note
+      description: Demonstrates a `text/plain` request body.
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              maxLength: 1000
+            example: Remember to restock the espresso beans.
+      responses:
+        '201':
+          description: Note created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /legacy/users.xml:
+    post:
+      tags: [Legacy]
+      summary: Create a user (XML, deprecated)
+      description: |
+        ⚠️ **Deprecated** — use `POST /users` instead.
+
+        Demonstrates an `application/xml` request body with `xml` name/attribute
+        mappings, and how Swagger UI renders deprecated operations.
+      operationId: createUserXml
+      deprecated: true
+      externalDocs:
+        description: Migration guide
+        url: https://example.com/docs/migrate-from-xml
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/LegacyUserXml'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/LegacyUserXml'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+webhooks:
+  orderShipped:
+    post:
+      tags: [Orders]
+      summary: Order shipped notification
+      description: |
+        **OpenAPI 3.1 webhook** — Nova sends this to *your* registered endpoint
+        whenever an order ships. Respond `2xx` to acknowledge.
+      operationId: orderShippedWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderStatusEvent'
+            example:
+              orderId: 3f8b0f1e-4a4e-4a3b-9a3e-2f6c7d8e9f00
+              status: shipped
+              occurredAt: "2026-07-08T12:34:56Z"
+              trackingNumber: NV123456789TR
+      responses:
+        '200':
+          description: Acknowledged
+  userDeleted:
+    post:
+      tags: [Users]
+      summary: User deleted notification
+      operationId: userDeletedWebhook
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: integer
+                  format: int64
+                deletedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '204':
+          description: Acknowledged
+
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      name: X-API-Key
+      in: header
+      description: API key sent as the `X-API-Key` request header.
+    ApiKeyQuery:
+      type: apiKey
+      name: api_key
+      in: query
+      description: API key sent as the `api_key` query parameter.
+    ApiKeyCookie:
+      type: apiKey
+      name: API-KEY
+      in: cookie
+      description: API key sent as a cookie.
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Standard HTTP Basic authentication.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT bearer token, e.g. `Authorization Bearer <token>`.
+    OAuth2:
+      type: oauth2
+      description: OAuth 2.0 with authorization-code and client-credentials flows (fictional endpoints).
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/oauth/authorize
+          tokenUrl: https://auth.example.com/oauth/token
+          refreshUrl: https://auth.example.com/oauth/refresh
+          scopes:
+            profile:read: Read your profile
+            orders:read: Read your orders
+            orders:write: Place and modify orders
+        clientCredentials:
+          tokenUrl: https://auth.example.com/oauth/token
+          scopes:
+            orders:read: Read orders (machine-to-machine)
+    OpenId:
+      type: openIdConnect
+      # Static discovery document hosted alongside the spec — a real (fictional)
+      # issuer URL here would fail to fetch and log console errors on every load.
+      openIdConnectUrl: specs/examples/openid-configuration.json
+      description: OpenID Connect discovery (fictional issuer, static discovery document).
+
+  schemas:
+    User:
+      type: object
+      description: A registered user account.
+      required: [id, username, email, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Server-assigned unique ID.
+          examples: [42]
+        username:
+          type: string
+          pattern: '^[a-z0-9_]{3,30}$'
+          description: Unique handle (lowercase letters, digits, underscore).
+          examples: [ada]
+        email:
+          type: string
+          format: email
+          examples: [ada@example.com]
+        fullName:
+          type: [string, "null"]
+          description: Display name. Nullable — demonstrates OpenAPI 3.1 `type` arrays.
+          examples: [Ada Lovelace]
+        birthDate:
+          type: string
+          format: date
+        role:
+          $ref: '#/components/schemas/Role'
+        tags:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+          maxItems: 10
+        address:
+          $ref: '#/components/schemas/Address'
+        manager:
+          $ref: '#/components/schemas/User'
+          description: Recursive reference — a user's manager is also a user.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+      xml:
+        name: user
+
+    NewUser:
+      type: object
+      description: Payload for creating a user. `password` is write-only and never returned.
+      required: [username, email]
+      properties:
+        username:
+          type: string
+          pattern: '^[a-z0-9_]{3,30}$'
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 12
+          description: Write-only — accepted on input, never echoed in responses.
+        fullName:
+          type: [string, "null"]
+        birthDate:
+          type: string
+          format: date
+        role:
+          $ref: '#/components/schemas/Role'
+        tags:
+          type: array
+          items:
+            type: string
+        address:
+          $ref: '#/components/schemas/Address'
+
+    UserPatch:
+      type: object
+      description: Partial update — every field optional, unknown fields rejected.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        email:
+          type: string
+          format: email
+        fullName:
+          type: [string, "null"]
+        role:
+          $ref: '#/components/schemas/Role'
+
+    Role:
+      type: string
+      description: Access level of the account.
+      enum: [admin, editor, viewer]
+      default: viewer
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          pattern: '^[A-Z]{2}$'
+          examples: [US]
+        postalCode:
+          type: string
+
+    UserPage:
+      type: object
+      description: A paginated collection of users.
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          format: int64
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+          examples: [NOVA-MUG]
+        name:
+          type: string
+        priceCents:
+          type: integer
+          minimum: 0
+          description: Price in cents to avoid floating point issues.
+        currency:
+          type: string
+          const: USD
+          description: Demonstrates the JSON Schema `const` keyword.
+        metadata:
+          type: object
+          description: Free-form key/value pairs (`additionalProperties`).
+          additionalProperties:
+            type: string
+
+    NewOrder:
+      type: object
+      required: [items, paymentMethod]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [sku, quantity]
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+                maximum: 99
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        couponCode:
+          type: [string, "null"]
+        callbackUrl:
+          type: string
+          format: uri
+          description: If provided, order status events are POSTed here (see Callbacks).
+
+    PaymentMethod:
+      description: Polymorphic payment method — `oneOf` with a discriminator on `kind`.
+      oneOf:
+        - $ref: '#/components/schemas/CardPayment'
+        - $ref: '#/components/schemas/BankTransferPayment'
+        - $ref: '#/components/schemas/GiftCardPayment'
+      discriminator:
+        propertyName: kind
+        mapping:
+          card: '#/components/schemas/CardPayment'
+          bankTransfer: '#/components/schemas/BankTransferPayment'
+          giftCard: '#/components/schemas/GiftCardPayment'
+
+    PaymentBase:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          description: Payment method discriminator.
+
+    CardPayment:
+      allOf:
+        - $ref: '#/components/schemas/PaymentBase'
+        - type: object
+          required: [cardNumber, expiry]
+          properties:
+            cardNumber:
+              type: string
+              pattern: '^[0-9]{13,19}$'
+            expiry:
+              type: string
+              pattern: '^(0[1-9]|1[0-2])\/[0-9]{2}$'
+              examples: ["12/28"]
+
+    BankTransferPayment:
+      allOf:
+        - $ref: '#/components/schemas/PaymentBase'
+        - type: object
+          required: [iban]
+          properties:
+            iban:
+              type: string
+              examples: [TR330006100519786457841326]
+
+    GiftCardPayment:
+      allOf:
+        - $ref: '#/components/schemas/PaymentBase'
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              pattern: '^GC(-[0-9A-F]{4}){2}$'
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+              unitPriceCents:
+                type: integer
+        totalCents:
+          type: integer
+        placedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    OrderStatus:
+      type: string
+      enum: [pending, paid, shipped, delivered, cancelled]
+
+    OrderStatusEvent:
+      type: object
+      description: Event payload delivered via callbacks and webhooks.
+      required: [orderId, status, occurredAt]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        occurredAt:
+          type: string
+          format: date-time
+        trackingNumber:
+          type: [string, "null"]
+          description: Present once the order has shipped.
+
+    SearchHit:
+      description: Demonstrates `anyOf` — a hit is a product, a user, or both shapes merged.
+      anyOf:
+        - $ref: '#/components/schemas/Product'
+        - $ref: '#/components/schemas/User'
+
+    LegacyUserXml:
+      type: object
+      description: Legacy XML user shape with attribute and wrapped-array mappings.
+      properties:
+        id:
+          type: integer
+          xml:
+            attribute: true
+        username:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+            xml:
+              name: group
+          xml:
+            wrapped: true
+      xml:
+        name: legacyUser
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          examples: [validation_failed]
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              issue:
+                type: string
+
+  responses:
+    BadRequest:
+      description: The request payload failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: validation_failed
+            message: username must match ^[a-z0-9_]{3,30}$
+            details:
+              - field: username
+                issue: pattern_mismatch
+    Unauthorized:
+      description: Missing or invalid credentials.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnexpectedError:
+      description: An unexpected error occurred.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  links:
+    GetUserById:
+      operationId: getUserById
+      parameters:
+        userId: $response.body#/id
+      description: >
+        The `id` value returned in the response can be used as the `userId`
+        parameter in `GET /users/{userId}`.
+
+  examples:
+    AdaUser:
+      summary: A typical user object
+      value:
+        id: 42
+        username: ada
+        email: ada@example.com
+        fullName: Ada Lovelace
+        role: admin
+        createdAt: "2026-01-15T09:30:00Z"
