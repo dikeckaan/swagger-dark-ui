@@ -67,6 +67,12 @@ servers:
     description: In-browser mock (default) — requests are answered locally and never leave this page
   - url: https://httpbin.org/anything
     description: Live echo server (optional) — httpbin.org mirrors your request back
+  - url: '{server}'
+    description: Your own server — type any base URL below (localhost works too; the API must allow CORS)
+    variables:
+      server:
+        default: http://localhost:3000
+        description: Base URL of your API, e.g. http://localhost:3000 or https://api.example.com/v1
   - url: https://{region}.httpbin.org/anything
     description: Regional echo server (demonstrates server variables)
     variables:

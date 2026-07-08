@@ -385,14 +385,23 @@
     if (text === lastRenderedText) return;
     lastRenderedText = text;
 
-    // Make the in-browser mock the default server (the user's own servers
-    // stay selectable in the Servers dropdown). Render-time only — the
-    // editor text and downloads are untouched.
+    // Make the in-browser mock the default server and offer a free-text
+    // "your own server" entry; the user's own servers stay selectable.
+    // Render-time only — the editor text and downloads are untouched.
     var withMock = Object.assign({}, parsed);
     withMock.servers = [{
       url: window.SduiMock.ORIGIN,
       description: 'In-browser mock (default) — requests never leave this page'
-    }].concat(parsed.servers || []);
+    }].concat(parsed.servers || []).concat([{
+      url: '{server}',
+      description: 'Your own server — type any base URL below (localhost works too; the API must allow CORS)',
+      variables: {
+        server: {
+          'default': 'http://localhost:3000',
+          description: 'Base URL of your API, e.g. http://localhost:3000'
+        }
+      }
+    }]);
     window.SduiMock.setSpec(withMock);
 
     renderFromObject(withMock);
@@ -669,6 +678,72 @@
     link.click();
     URL.revokeObjectURL(link.href);
   }
+
+  /* ----- preview -> editor sync (click an operation/model, see its source) ----- */
+
+  function flashEditorLine(line) {
+    editor.scrollIntoView({ line: line, ch: 0 }, 120);
+    editor.setCursor({ line: line, ch: 0 });
+    editor.addLineClass(line, 'background', 'cm-target-line');
+    setTimeout(function () {
+      editor.removeLineClass(line, 'background', 'cm-target-line');
+    }, 1600);
+  }
+
+  function findLine(regex, fromLine) {
+    for (var i = fromLine || 0; i < editor.lineCount(); i++) {
+      if (regex.test(editor.getLine(i))) return i;
+    }
+    return -1;
+  }
+
+  function keyRegex(name) {
+    var esc = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('^\\s*["\']?' + esc + '["\']?\\s*:');
+  }
+
+  function highlightOperation(path, method) {
+    var pathLine = findLine(keyRegex(path));
+    if (pathLine === -1) return;
+    var target = pathLine;
+    if (method) {
+      var methodRe = keyRegex(method);
+      var pathIndent = (editor.getLine(pathLine).match(/^\s*/) || [''])[0].length;
+      for (var i = pathLine + 1; i < editor.lineCount(); i++) {
+        var line = editor.getLine(i);
+        var indent = (line.match(/^\s*/) || [''])[0].length;
+        if (line.trim() && indent <= pathIndent) break; // left this path's block
+        if (methodRe.test(line)) { target = i; break; }
+      }
+    }
+    flashEditorLine(target);
+  }
+
+  function highlightSchema(name) {
+    var schemasLine = findLine(keyRegex('schemas'));
+    var target = findLine(keyRegex(name), schemasLine === -1 ? 0 : schemasLine);
+    if (target !== -1) flashEditorLine(target);
+  }
+
+  document.getElementById('swagger-ui').addEventListener('click', function (e) {
+    if (specSelect.value !== 'custom' || !editor) return;
+
+    var summary = e.target.closest('.opblock-summary');
+    if (summary) {
+      var block = summary.closest('.opblock');
+      var pathEl = summary.querySelector('.opblock-summary-path, .opblock-summary-path__deprecated');
+      var m = block && block.className.match(/opblock-(get|post|put|patch|delete|head|options|trace)/);
+      if (pathEl) {
+        highlightOperation(pathEl.getAttribute('data-path') || pathEl.textContent.trim(), m && m[1]);
+      }
+      return;
+    }
+
+    var model = e.target.closest('.model-container');
+    if (model && model.id && model.id.indexOf('model-') === 0) {
+      highlightSchema(model.id.slice('model-'.length));
+    }
+  });
 
   /* ----- spec selection ----- */
 

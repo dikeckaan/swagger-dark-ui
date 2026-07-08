@@ -641,6 +641,10 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
 #editor-host .CodeMirror-selected { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 #editor-host .CodeMirror-focused .CodeMirror-selected { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 #editor-host .CodeMirror-activeline-background { background: var(--surface-2); }
+#editor-host .cm-target-line {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  transition: background-color 0.4s ease;
+}
 #editor-host .cm-atom { color: var(--syntax-boolean); }
 #editor-host .cm-number { color: var(--syntax-number); }
 #editor-host .cm-string { color: var(--syntax-string); }
