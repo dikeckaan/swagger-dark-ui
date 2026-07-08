@@ -7,11 +7,13 @@
     demo: {
       url: 'specs/demo-api.yaml',
       label: 'Demo API — full feature showcase',
+      copyName: 'Demo API (copy)',
       mock: true // parse the document so the in-browser mock can answer requests
     },
     petstore: {
       url: 'https://petstore3.swagger.io/api/v3/openapi.json',
       label: 'Swagger Petstore (live)',
+      copyName: 'Petstore (copy)',
       // The Petstore spec declares a relative server (/api/v3), which would
       // resolve against this site's origin — send those calls to the live
       // Petstore host instead.
@@ -692,6 +694,7 @@
     editorPane.hidden = !isCustom;
     document.body.classList.toggle('editor-active', isCustom);
     layoutSwitch.hidden = !isCustom;
+    document.getElementById('edit-spec').hidden = isCustom;
 
     if (isCustom) {
       ensureEditor();
@@ -707,6 +710,38 @@
 
   specSelect.addEventListener('change', function () {
     renderSpec(specSelect.value);
+  });
+
+  /* ----- "edit a copy": bring a ready-made spec into the editor ----- */
+
+  var editSpecBtn = document.getElementById('edit-spec');
+  editSpecBtn.addEventListener('click', function () {
+    var src = SPECS[specSelect.value];
+    if (!src || !src.url) return;
+    editSpecBtn.disabled = true;
+    fetch(src.url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        // Minified JSON specs (like Petstore's) become tidy YAML in the copy.
+        if (/^\s*\{/.test(text)) {
+          try { text = jsyaml.dump(jsyaml.load(text), { lineWidth: 110, noRefs: true, skipInvalid: true }); }
+          catch (e) { /* keep the original text */ }
+        }
+        // Enter editor mode first (it re-renders the currently active doc),
+        // THEN create and switch to the copy so its content isn't clobbered.
+        renderSpec('custom');
+        addDoc(src.copyName || (src.label + ' (copy)'), text);
+        refreshDocSelect();
+        switchDoc(activeDocId());
+        setEditorStatus('ok', 'Editable copy created — the original spec is untouched');
+      })
+      .catch(function (err) {
+        setEditorStatus('err', 'Could not load the spec: ' + err.message);
+      })
+      .then(function () { editSpecBtn.disabled = false; });
   });
 
   if (typeof window.SwaggerUIBundle === 'undefined') {

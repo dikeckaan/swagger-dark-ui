@@ -466,6 +466,20 @@ body, .sdui-header, .swagger-ui,
 :root.is-fullscreen .icon-expand { display: none; }
 :root.is-fullscreen .icon-compress { display: block; }
 
+.sdui-edit-btn {
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sdui-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+.sdui-edit-btn[hidden] { display: none; }
+
 /* segmented layout switch (custom editor mode only) */
 .sdui-seg {
   display: inline-flex;
