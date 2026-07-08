@@ -93,6 +93,19 @@
     try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
   }
 
+  /* ----- header height (the bar wraps to two rows on small screens) ----- */
+
+  var headerEl = document.querySelector('.sdui-header');
+  function syncHeaderHeight() {
+    document.documentElement.style.setProperty('--header-h', headerEl.offsetHeight + 'px');
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncHeaderHeight).observe(headerEl);
+  } else {
+    window.addEventListener('resize', syncHeaderHeight);
+  }
+  syncHeaderHeight();
+
   /* ----- theme ----- */
 
   function setTheme(theme) {
