@@ -3,7 +3,7 @@
 A polished, **dark-themed Swagger UI showcase** that demonstrates every feature
 Swagger UI can render — deployed as a fully static site on GitHub Pages.
 
-**Live demo → https://kaandikec.github.io/swagger-dark-ui/**
+**Live demo → https://kaandikec.com/swagger-dark-ui/**
 
 ## Features
 
