@@ -6,9 +6,35 @@
 (function () {
   'use strict';
 
+  /* Returns 'v2' for convertible collections, 'v1' for legacy exports we
+     cannot convert, null for anything that is not a Postman collection.
+     Accepts either a parsed object or raw JSON text. */
+  function detect(input) {
+    var obj = input;
+    if (typeof input === 'string') {
+      try { obj = JSON.parse(input); } catch (e) { return null; }
+    }
+    if (!obj || typeof obj !== 'object') return null;
+
+    var schema = String((obj.info && (obj.info.schema || obj.info._postman_schema)) || '');
+    if (obj.info && Array.isArray(obj.item)) {
+      if (/collection\/v2|#2\./.test(schema)) return 'v2';
+      // Schema-less but v2-shaped: folders/requests under `item` entries.
+      if (!schema && obj.info.name &&
+          obj.item.some(function (it) { return it && (it.request || Array.isArray(it.item)); })) {
+        return 'v2';
+      }
+    }
+    // v1 exports have no `item` tree; requests live in flat arrays.
+    if (obj.name && (Array.isArray(obj.requests) || Array.isArray(obj.order) || Array.isArray(obj.folders)) &&
+        !Array.isArray(obj.item)) {
+      return 'v1';
+    }
+    return null;
+  }
+
   function isPostmanCollection(obj) {
-    return !!(obj && obj.info && typeof obj.info.schema === 'string' &&
-      /collection\/v2/.test(obj.info.schema) && Array.isArray(obj.item));
+    return detect(obj) === 'v2';
   }
 
   function descriptionText(d) {
@@ -268,8 +294,11 @@
     return oas;
   }
 
-  /* Public: returns { name, yaml } if text is a v2+ Postman collection, else null. */
+  /* Public API.
+     detect(textOrObject) -> 'v2' | 'v1' | null
+     tryConvert(text) -> { name, yaml } for v2+ collections, else null. */
   window.SduiPostman = {
+    detect: detect,
     tryConvert: function (text) {
       var obj;
       try { obj = JSON.parse(text); } catch (e) { return null; }
@@ -277,7 +306,7 @@
       var oas = convert(obj);
       return {
         name: oas.info.title,
-        yaml: jsyaml.dump(oas, { lineWidth: 110, noRefs: true })
+        yaml: jsyaml.dump(oas, { lineWidth: 110, noRefs: true, skipInvalid: true })
       };
     }
   };

@@ -507,6 +507,7 @@ body.editor-active #swagger-ui {
   width: 100%;
   margin: 0;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   height: 100%;
   padding: 8px 18px 80px;
@@ -516,6 +517,10 @@ body.editor-active #swagger-ui {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* A grid item's default min-height:auto lets long editor content stretch
+     the pane past its track, pushing the status bar off-screen. */
+  min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--border);
   background: var(--surface);
 }

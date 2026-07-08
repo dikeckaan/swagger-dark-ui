@@ -357,6 +357,25 @@
       return;
     }
     if (!parsed.openapi && !parsed.swagger) {
+      // Pasted Postman collections are converted in place.
+      var postmanKind = window.SduiPostman && SduiPostman.detect(parsed);
+      if (postmanKind === 'v2') {
+        try {
+          var converted = SduiPostman.tryConvert(text);
+          if (converted) {
+            editor.setValue(converted.yaml); // change event re-renders
+            setEditorStatus('ok', 'Postman collection detected — converted to OpenAPI 3');
+            return;
+          }
+        } catch (convErr) {
+          setEditorStatus('err', 'Postman conversion failed: ' + convErr.message);
+          return;
+        }
+      }
+      if (postmanKind === 'v1') {
+        setEditorStatus('err', 'This is a Postman Collection v1 export — in Postman choose Export → Collection v2.1 and try again');
+        return;
+      }
       setEditorStatus('err', 'Missing "openapi" (or "swagger") version field');
       return;
     }
@@ -612,7 +631,13 @@
      keep it as a NEW saved spec (conversion is lossy, so the current spec
      is never overwritten). Plain OpenAPI text replaces the editor content. */
   function importText(text) {
-    var converted = window.SduiPostman && SduiPostman.tryConvert(text);
+    var converted = null;
+    try {
+      converted = window.SduiPostman && SduiPostman.tryConvert(text);
+    } catch (err) {
+      setEditorStatus('err', 'Postman conversion failed: ' + err.message);
+      return;
+    }
     if (converted) {
       addDoc(converted.name, converted.yaml);
       refreshDocSelect();
