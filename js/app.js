@@ -30,7 +30,9 @@
   var DEFAULT_SPEC = 'demo';
   var THEME_KEY = 'sdui-theme';
   var SPEC_KEY = 'sdui-spec';
-  var CUSTOM_SPEC_KEY = 'sdui-custom-spec';
+  var CUSTOM_SPEC_KEY = 'sdui-custom-spec'; // legacy single-doc slot, migrated below
+  var DOCS_KEY = 'sdui-custom-specs';
+  var ACTIVE_DOC_KEY = 'sdui-custom-active';
   var LAYOUT_KEY = 'sdui-layout';
   var LAYOUTS = ['editor', 'split', 'preview'];
   var RENDER_DEBOUNCE_MS = 700;
@@ -93,6 +95,52 @@
     try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
   }
 
+  /* ----- saved custom specs (multi-document store) ----- */
+
+  function newDocId() {
+    return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function loadDocs() {
+    try {
+      var d = JSON.parse(storageGet(DOCS_KEY) || 'null');
+      if (d && typeof d === 'object' && Object.keys(d).length) return d;
+    } catch (e) { /* corrupted — start over */ }
+    return null;
+  }
+
+  var docs = loadDocs();
+  if (!docs) {
+    // First run (or migration from the old single-spec slot).
+    docs = {};
+    var migrated = newDocId();
+    docs[migrated] = {
+      name: 'My API',
+      text: storageGet(CUSTOM_SPEC_KEY) || CUSTOM_TEMPLATE,
+      updatedAt: Date.now()
+    };
+    storageSet(ACTIVE_DOC_KEY, migrated);
+  }
+
+  function saveDocs() { storageSet(DOCS_KEY, JSON.stringify(docs)); }
+  saveDocs();
+
+  function activeDocId() {
+    var id = storageGet(ACTIVE_DOC_KEY);
+    if (id && docs[id]) return id;
+    id = Object.keys(docs)[0];
+    storageSet(ACTIVE_DOC_KEY, id);
+    return id;
+  }
+
+  function addDoc(name, text) {
+    var id = newDocId();
+    docs[id] = { name: name, text: text, updatedAt: Date.now() };
+    saveDocs();
+    storageSet(ACTIVE_DOC_KEY, id);
+    return id;
+  }
+
   /* ----- header height (the bar wraps to two rows on small screens) ----- */
 
   var headerEl = document.querySelector('.sdui-header');
@@ -116,6 +164,15 @@
   themeToggle.addEventListener('click', function () {
     var current = document.documentElement.getAttribute('data-theme');
     setTheme(current === 'dark' ? 'light' : 'dark');
+  });
+
+  /* ----- color palette ----- */
+
+  var paletteSelect = document.getElementById('palette-select');
+  paletteSelect.value = document.documentElement.getAttribute('data-palette') || 'default';
+  paletteSelect.addEventListener('change', function () {
+    document.documentElement.setAttribute('data-palette', paletteSelect.value);
+    storageSet('sdui-palette', paletteSelect.value);
   });
 
   /* ----- full screen ----- */
@@ -156,6 +213,61 @@
     if (btn) applyLayout(btn.getAttribute('data-layout'));
   });
 
+  /* ----- request code snippets ----- */
+
+  function snippetParts(request) {
+    var headers = request.get('headers');
+    return {
+      url: request.get('url'),
+      method: (request.get('method') || 'GET').toUpperCase(),
+      headers: headers && headers.toJS ? headers.toJS() : (headers || {}),
+      body: request.get('body')
+    };
+  }
+
+  var SnippetsPlugin = {
+    fn: {
+      requestSnippetGenerator_js_fetch: function (request) {
+        var r = snippetParts(request);
+        var lines = ['const response = await fetch(' + JSON.stringify(r.url) + ', {'];
+        lines.push('  method: ' + JSON.stringify(r.method) + ',');
+        if (Object.keys(r.headers).length) {
+          lines.push('  headers: ' + JSON.stringify(r.headers, null, 2).replace(/\n/g, '\n  ') + ',');
+        }
+        if (typeof r.body === 'string' && r.body.length) {
+          lines.push('  body: ' + JSON.stringify(r.body) + ',');
+        } else if (r.body && typeof FormData !== 'undefined' && r.body instanceof FormData) {
+          lines.push('  body: formData, // build a FormData with your file/fields');
+        }
+        lines.push('});');
+        lines.push('');
+        lines.push('const data = await response.json();');
+        lines.push('console.log(response.status, data);');
+        return lines.join('\n');
+      },
+      requestSnippetGenerator_python: function (request) {
+        var r = snippetParts(request);
+        var lines = ['import requests', ''];
+        lines.push('response = requests.request(');
+        lines.push('    ' + JSON.stringify(r.method) + ',');
+        lines.push('    ' + JSON.stringify(r.url) + ',');
+        if (Object.keys(r.headers).length) {
+          lines.push('    headers=' + JSON.stringify(r.headers) + ',');
+        }
+        if (typeof r.body === 'string' && r.body.length) {
+          lines.push("    data=r'''" + r.body.replace(/'''/g, "\\'\\'\\'") + "''',");
+        } else if (r.body && typeof FormData !== 'undefined' && r.body instanceof FormData) {
+          lines.push("    files={'file': open('path/to/file', 'rb')},  # multipart body");
+        }
+        lines.push(')');
+        lines.push('');
+        lines.push('print(response.status_code)');
+        lines.push('print(response.text)');
+        return lines.join('\n');
+      }
+    }
+  };
+
   /* ----- swagger ui ----- */
 
   function baseConfig() {
@@ -173,7 +285,20 @@
       showExtensions: true,
       showCommonExtensions: true,
       queryConfigEnabled: false,
-      validatorUrl: null
+      validatorUrl: null,
+      plugins: [SnippetsPlugin],
+      requestSnippetsEnabled: true,
+      requestSnippets: {
+        generators: {
+          curl_bash: { title: 'cURL (bash)', syntax: 'bash' },
+          curl_powershell: { title: 'cURL (PowerShell)', syntax: 'powershell' },
+          curl_cmd: { title: 'cURL (CMD)', syntax: 'bash' },
+          js_fetch: { title: 'JavaScript (fetch)', syntax: 'javascript' },
+          python: { title: 'Python (requests)', syntax: 'python' }
+        },
+        defaultExpanded: true,
+        languages: null
+      }
     };
   }
 
@@ -213,7 +338,11 @@
 
   function renderEditorContent() {
     var text = editor.getValue();
-    storageSet(CUSTOM_SPEC_KEY, text);
+    var doc = docs[activeDocId()];
+    doc.text = text;
+    doc.updatedAt = Date.now();
+    saveDocs();
+    updateConvertLabel();
 
     var parsed;
     try {
@@ -257,7 +386,7 @@
   function ensureEditor() {
     if (editor) return;
     editor = CodeMirror(document.getElementById('editor-host'), {
-      value: storageGet(CUSTOM_SPEC_KEY) || CUSTOM_TEMPLATE,
+      value: docs[activeDocId()].text,
       mode: 'yaml',
       lineNumbers: true,
       lineWrapping: false,
@@ -265,10 +394,17 @@
       tabSize: 2,
       viewportMargin: 20,
       extraKeys: {
-        Tab: function (cm) { cm.replaceSelection('  ', 'end'); }
+        Tab: function (cm) { cm.replaceSelection('  ', 'end'); },
+        'Cmd-S': downloadSpec,
+        'Ctrl-S': downloadSpec,
+        'Cmd-Enter': renderNow,
+        'Ctrl-Enter': renderNow
       }
     });
     editor.on('change', scheduleRender);
+    wireDocControls();
+    refreshDocSelect();
+    updateConvertLabel();
 
     var urlRow = document.getElementById('editor-url-row');
     var urlInput = document.getElementById('editor-url-input');
@@ -308,6 +444,146 @@
     });
   }
 
+  function renderNow() {
+    clearTimeout(renderTimer);
+    renderEditorContent();
+  }
+
+  function refreshDocSelect() {
+    var select = document.getElementById('doc-select');
+    select.innerHTML = '';
+    Object.keys(docs).forEach(function (id) {
+      var opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = docs[id].name;
+      select.appendChild(opt);
+    });
+    select.value = activeDocId();
+  }
+
+  function switchDoc(id) {
+    if (!docs[id]) return;
+    storageSet(ACTIVE_DOC_KEY, id);
+    lastRenderedText = null;
+    editor.setValue(docs[id].text); // change event persists + re-renders
+    renderNow();
+  }
+
+  function updateConvertLabel() {
+    document.getElementById('editor-convert').textContent =
+      /^\s*\{/.test(editor.getValue()) ? 'To YAML' : 'To JSON';
+  }
+
+  function toggleFormat() {
+    var text = editor.getValue();
+    try {
+      var parsed = jsyaml.load(text);
+      if (/^\s*\{/.test(text)) {
+        editor.setValue(jsyaml.dump(parsed, { lineWidth: 100, noRefs: true }));
+      } else {
+        editor.setValue(JSON.stringify(parsed, null, 2));
+      }
+      renderNow();
+    } catch (err) {
+      setEditorStatus('err', 'Cannot convert: ' + (err.reason || err.message));
+    }
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      ta.remove();
+      ok ? resolve() : reject(new Error('copy failed'));
+    });
+  }
+
+  function shareSpec() {
+    var data = LZString.compressToEncodedURIComponent(editor.getValue());
+    var link = window.location.origin + window.location.pathname + '?spec=custom#s=' + data;
+    copyText(link).then(function () {
+      setEditorStatus('ok', link.length > 8000
+        ? 'Share link copied — but it is very long (' + link.length + ' chars); some apps truncate long URLs'
+        : 'Share link copied to clipboard (' + link.length + ' chars)');
+    }).catch(function () {
+      setEditorStatus('err', 'Could not copy the link to the clipboard');
+    });
+  }
+
+  function wireDocControls() {
+    var select = document.getElementById('doc-select');
+    var renameInput = document.getElementById('doc-rename-input');
+    var renameBtn = document.getElementById('doc-rename');
+    var deleteBtn = document.getElementById('doc-delete');
+
+    select.addEventListener('change', function () { switchDoc(select.value); });
+
+    document.getElementById('doc-new').addEventListener('click', function () {
+      var n = Object.keys(docs).length + 1;
+      addDoc('Untitled ' + n, CUSTOM_TEMPLATE);
+      refreshDocSelect();
+      switchDoc(activeDocId());
+    });
+
+    function commitRename() {
+      var name = renameInput.value.trim();
+      if (name) {
+        docs[activeDocId()].name = name;
+        saveDocs();
+      }
+      renameInput.hidden = true;
+      select.hidden = false;
+      refreshDocSelect();
+    }
+    renameBtn.addEventListener('click', function () {
+      if (renameInput.hidden) {
+        renameInput.value = docs[activeDocId()].name;
+        select.hidden = true;
+        renameInput.hidden = false;
+        renameInput.focus();
+        renameInput.select();
+      } else {
+        commitRename();
+      }
+    });
+    renameInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') commitRename();
+      if (e.key === 'Escape') { renameInput.hidden = true; select.hidden = false; }
+    });
+    renameInput.addEventListener('blur', commitRename);
+
+    var deleteArmedUntil = 0;
+    deleteBtn.addEventListener('click', function () {
+      if (Date.now() < deleteArmedUntil) {
+        delete docs[activeDocId()];
+        if (!Object.keys(docs).length) addDoc('My API', CUSTOM_TEMPLATE);
+        saveDocs();
+        storageSet(ACTIVE_DOC_KEY, Object.keys(docs)[0]);
+        refreshDocSelect();
+        switchDoc(activeDocId());
+        deleteBtn.textContent = 'Delete';
+        deleteArmedUntil = 0;
+      } else {
+        deleteArmedUntil = Date.now() + 3000;
+        deleteBtn.textContent = 'Sure?';
+        setTimeout(function () {
+          if (Date.now() >= deleteArmedUntil) deleteBtn.textContent = 'Delete';
+        }, 3100);
+      }
+    });
+
+    document.getElementById('editor-share').addEventListener('click', shareSpec);
+    document.getElementById('editor-convert').addEventListener('click', toggleFormat);
+  }
+
   function loadFromUrl() {
     var urlRow = document.getElementById('editor-url-row');
     var url = document.getElementById('editor-url-input').value.trim();
@@ -324,8 +600,7 @@
         return res.text();
       })
       .then(function (text) {
-        editor.setValue(text);
-        setEditorStatus('ok', 'Loaded — rendering live');
+        importText(text);
       })
       .catch(function (err) {
         setEditorStatus('err', 'Fetch failed: ' + err.message +
@@ -333,11 +608,27 @@
       });
   }
 
+  /* Imported text may be a Postman collection — convert it to OpenAPI and
+     keep it as a NEW saved spec (conversion is lossy, so the current spec
+     is never overwritten). Plain OpenAPI text replaces the editor content. */
+  function importText(text) {
+    var converted = window.SduiPostman && SduiPostman.tryConvert(text);
+    if (converted) {
+      addDoc(converted.name, converted.yaml);
+      refreshDocSelect();
+      switchDoc(activeDocId());
+      setEditorStatus('ok', 'Postman collection converted to OpenAPI and saved as "' + converted.name + '"');
+      return;
+    }
+    editor.setValue(text);
+    renderNow();
+  }
+
   function openLocalFile(event) {
     var file = event.target.files && event.target.files[0];
     if (!file) return;
     var reader = new FileReader();
-    reader.onload = function () { editor.setValue(String(reader.result)); };
+    reader.onload = function () { importText(String(reader.result)); };
     reader.onerror = function () { setEditorStatus('err', 'Could not read ' + file.name); };
     reader.readAsText(file);
     fileInput.value = '';
@@ -368,7 +659,9 @@
 
     var params = new URLSearchParams(window.location.search);
     params.set('spec', specId);
-    history.replaceState(null, '', window.location.pathname + '?' + params.toString());
+    // Keep deep-link hashes (#/Tag/operationId); drop only consumed share payloads.
+    var hash = window.location.hash.indexOf('#s=') === 0 ? '' : window.location.hash;
+    history.replaceState(null, '', window.location.pathname + '?' + params.toString() + hash);
 
     var isCustom = specId === 'custom';
     editorPane.hidden = !isCustom;
@@ -399,5 +692,24 @@
     return;
   }
 
-  renderSpec(currentSpecId());
+  // A shared spec arriving via the URL hash (#s=<lz-string data>) becomes a
+  // new saved document — existing specs are never overwritten.
+  var sharedText = null;
+  if (window.location.hash.indexOf('#s=') === 0) {
+    try {
+      sharedText = LZString.decompressFromEncodedURIComponent(window.location.hash.slice(3)) || null;
+    } catch (e) { /* malformed hash — ignore */ }
+  }
+  if (sharedText) {
+    // Shared Postman collections get converted on arrival, like file imports.
+    var sharedConv = window.SduiPostman && SduiPostman.tryConvert(sharedText);
+    if (sharedConv) {
+      addDoc(sharedConv.name, sharedConv.yaml);
+    } else {
+      addDoc('Shared ' + new Date().toISOString().slice(0, 10), sharedText);
+    }
+    renderSpec('custom'); // replaceState in renderSpec also drops the hash
+  } else {
+    renderSpec(currentSpecId());
+  }
 })();

@@ -19,6 +19,11 @@ info:
     >
     > 🎛️ Where an `X-Mock-Status` header parameter is available (e.g. `GET /users/{userId}`),
     > set it to any documented status code — like `404` — to see that error response.
+    > An `X-Mock-Delay: <ms>` header simulates latency (up to 5000 ms).
+    >
+    > 🗄️ **The mock is stateful.** `POST /users` really creates a record (kept in your
+    > browser's memory), `GET /users` then lists what you created, and `PUT`/`PATCH`/
+    > `DELETE /users/{userId}` update or remove it. Refreshing the page resets the data.
 
     ## What's demonstrated here
 

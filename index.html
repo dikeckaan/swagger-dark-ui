@@ -13,7 +13,11 @@
         if (t === 'light' || t === 'dark') {
           document.documentElement.setAttribute('data-theme', t);
         }
-      } catch (e) { /* localStorage unavailable — keep default */ }
+        var p = localStorage.getItem('sdui-palette');
+        if (p && ['default', 'nord', 'dracula', 'catppuccin'].indexOf(p) !== -1) {
+          document.documentElement.setAttribute('data-palette', p);
+        }
+      } catch (e) { /* localStorage unavailable — keep defaults */ }
     })();
   </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E" />
@@ -48,6 +52,12 @@
         <button type="button" data-layout="split" title="Editor and preview side by side">Split</button>
         <button type="button" data-layout="preview" title="Preview only (hide editor)">Preview</button>
       </div>
+      <select id="palette-select" aria-label="Color palette" title="Color palette">
+        <option value="default">Default</option>
+        <option value="nord">Nord</option>
+        <option value="dracula">Dracula</option>
+        <option value="catppuccin">Catppuccin</option>
+      </select>
       <button id="fullscreen-toggle" class="sdui-toggle" type="button" aria-label="Toggle full screen" title="Toggle full screen">
         <svg class="icon-expand" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -83,11 +93,19 @@
   <div id="workspace">
     <aside id="editor-pane" hidden>
       <div class="sdui-editor-toolbar">
-        <span class="sdui-editor-title">OpenAPI source</span>
+        <div class="sdui-doc-controls">
+          <select id="doc-select" aria-label="Saved specs" title="Your saved specs"></select>
+          <input id="doc-rename-input" type="text" aria-label="New name" hidden />
+          <button id="doc-new" class="sdui-tool-btn" type="button" title="Create a new spec from the starter template">New</button>
+          <button id="doc-rename" class="sdui-tool-btn" type="button" title="Rename this spec">Rename</button>
+          <button id="doc-delete" class="sdui-tool-btn" type="button" title="Delete this spec">Delete</button>
+        </div>
         <div class="sdui-editor-actions">
+          <button id="editor-share" class="sdui-tool-btn" type="button" title="Copy a shareable link that embeds this spec">Share</button>
+          <button id="editor-convert" class="sdui-tool-btn" type="button" title="Convert between YAML and JSON">To JSON</button>
           <button id="editor-load-url" class="sdui-tool-btn" type="button" title="Fetch a spec from a URL into the editor">Load URL</button>
           <button id="editor-open-file" class="sdui-tool-btn" type="button" title="Open a local YAML/JSON file">Open file</button>
-          <button id="editor-download" class="sdui-tool-btn" type="button" title="Download the current spec as YAML">Download</button>
+          <button id="editor-download" class="sdui-tool-btn" type="button" title="Download the current spec (Cmd/Ctrl+S)">Download</button>
           <button id="editor-reset" class="sdui-tool-btn" type="button" title="Replace the editor content with the starter template">Reset</button>
         </div>
         <input id="editor-file-input" type="file" accept=".yaml,.yml,.json,.txt" hidden />
@@ -111,7 +129,10 @@
           integrity="sha384-9q49Jm3hZMwxEMLImsxPxLiaptHpFz1PVa26Dg6SVIO+rj5kx0cgOM2+4ikKJFH9" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"
           integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"
+          integrity="sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7" crossorigin="anonymous"></script>
   <script src="js/mock.js"></script>
+  <script src="js/postman.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

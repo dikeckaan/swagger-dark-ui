@@ -7,11 +7,14 @@ Swagger UI can render — deployed as a fully static site on GitHub Pages.
 
 ## Features
 
-- 🌗 **Dark theme by default**, with a light-mode toggle (preference persisted in `localStorage`)
+- 🌗 **Dark theme by default**, with a light-mode toggle and four color palettes (Default, Nord, Dracula, Catppuccin) — all persisted in `localStorage`
 - 🔀 **Spec switcher** — flip between the full-feature demo API and the live Swagger Petstore (shareable via `?spec=` URL parameter)
-- ✏️ **Bring your own API** — a built-in split-pane YAML editor with live preview: paste or type a spec, open a local file, fetch one from a URL (CORS required), download your work; edits persist in `localStorage`
-- ⚡ **"Try it out" really works — offline** — the default server is an in-browser mock (`js/mock.js`) that answers requests locally: operations with documented response schemas return schema-derived examples, the rest echo the request httpbin-style. A live [httpbin.org](https://httpbin.org) server stays selectable in the Servers dropdown, and Petstore runs against the live `petstore3.swagger.io` server
-- 📦 **Zero build step** — plain HTML/CSS/JS with a pinned, SRI-verified `swagger-ui-dist` from CDN
+- ✏️ **Bring your own APIs** — a built-in split-pane YAML editor with live preview: multiple named specs, open local files, fetch from a URL (CORS required), download, JSON↔YAML conversion, `Cmd/Ctrl+S` to save and `Cmd/Ctrl+Enter` to render
+- 📮 **Postman import** — drop a Postman Collection (v2 / v2.1+) export into *Open file* or *Load URL* and it is converted to OpenAPI 3 automatically (`js/postman.js`)
+- 🔗 **Share specs by link** — the *Share* button packs the current spec into a compressed URL hash (lz-string); no backend involved
+- ⚡ **"Try it out" really works — offline and stateful** — the default server is an in-browser mock (`js/mock.js`): `POST` really creates records (kept in memory), `GET` lists them, `PUT`/`PATCH`/`DELETE` update and remove; endpoints without stored data return schema-derived examples, the rest echo the request httpbin-style. `X-Mock-Status` forces a documented status code, `X-Mock-Delay` simulates latency. A live [httpbin.org](https://httpbin.org) server stays selectable, and Petstore runs against the live `petstore3.swagger.io` server
+- 🧾 **Request snippets** — every operation shows ready-to-copy cURL (bash/PowerShell/CMD), JavaScript `fetch`, and Python `requests` code
+- 📦 **Zero build step** — plain HTML/CSS/JS with pinned, SRI-verified CDN assets
 
 ## What the demo spec covers
 

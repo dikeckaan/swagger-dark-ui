@@ -48,6 +48,8 @@
   --syntax-boolean: #ff7b72;
   --syntax-comment: #8b949e;
 
+  --on-accent: #ffffff;
+
   color-scheme: dark;
 }
 
@@ -95,7 +97,256 @@
   --syntax-boolean: #cf222e;
   --syntax-comment: #59636e;
 
+  --on-accent: #ffffff;
+
   color-scheme: light;
+}
+
+/* ==========================================================================
+   Palettes — override the default tokens per data-palette + data-theme.
+   ========================================================================== */
+
+/* Nord — Polar Night / Snow Storm / Frost / Aurora */
+:root[data-palette="nord"],
+:root[data-palette="nord"][data-theme="dark"] {
+  --bg: #242933;
+  --bg-gradient: radial-gradient(1200px 400px at 70% -10%, #2e3440 0%, transparent 60%);
+  --surface: #2e3440;
+  --surface-2: #3b4252;
+  --surface-3: #434c5e;
+  --border: #4c566a;
+  --border-subtle: #3b4252;
+  --text: #d8dee9;
+  --text-strong: #eceff4;
+  --text-muted: #9aa5b8;
+  --text-faint: #7b88a1;
+  --accent: #88c0d0;
+  --accent-strong: #8fbcbb;
+  --link: #88c0d0;
+  --code-bg: #20242e;
+  --code-text: #d8dee9;
+  --input-bg: #242933;
+  --input-border: #4c566a;
+  --input-text: #d8dee9;
+  --scrollbar-thumb: #4c566a;
+  --scrollbar-thumb-hover: #5e6b82;
+  --method-get: #81a1c1;
+  --method-post: #a3be8c;
+  --method-put: #ebcb8b;
+  --method-patch: #88c0d0;
+  --method-delete: #bf616a;
+  --method-head: #b48ead;
+  --method-options: #d08770;
+  --status-ok: #a3be8c;
+  --status-warn: #ebcb8b;
+  --status-err: #bf616a;
+  --syntax-key: #88c0d0;
+  --syntax-string: #a3be8c;
+  --syntax-number: #b48ead;
+  --syntax-boolean: #d08770;
+  --syntax-comment: #7b88a1;
+  --on-accent: #20242e;
+}
+:root[data-palette="nord"][data-theme="light"] {
+  --bg: #eceff4;
+  --bg-gradient: radial-gradient(1200px 400px at 70% -10%, #d8dee9 0%, transparent 60%);
+  --surface: #ffffff;
+  --surface-2: #eceff4;
+  --surface-3: #e5e9f0;
+  --border: #d8dee9;
+  --border-subtle: #e5e9f0;
+  --text: #2e3440;
+  --text-strong: #242933;
+  --text-muted: #5e6b82;
+  --text-faint: #8792a8;
+  --accent: #5e81ac;
+  --accent-strong: #4c6a92;
+  --link: #5e81ac;
+  --code-bg: #e5e9f0;
+  --code-text: #2e3440;
+  --input-bg: #ffffff;
+  --input-border: #d8dee9;
+  --input-text: #2e3440;
+  --scrollbar-thumb: #d8dee9;
+  --scrollbar-thumb-hover: #b8c2d4;
+  --method-get: #5e81ac;
+  --method-post: #6d8a51;
+  --method-put: #a8781c;
+  --method-patch: #3f7583;
+  --method-delete: #a54049;
+  --method-head: #8b5f85;
+  --method-options: #b05f3c;
+  --status-ok: #6d8a51;
+  --status-warn: #a8781c;
+  --status-err: #a54049;
+  --syntax-key: #3f7583;
+  --syntax-string: #56683c;
+  --syntax-number: #8b5f85;
+  --syntax-boolean: #b05f3c;
+  --syntax-comment: #5e6b82;
+  --on-accent: #ffffff;
+}
+
+/* Dracula — and a light "Alucard" counterpart */
+:root[data-palette="dracula"],
+:root[data-palette="dracula"][data-theme="dark"] {
+  --bg: #1e1f29;
+  --bg-gradient: radial-gradient(1200px 400px at 70% -10%, #282a36 0%, transparent 60%);
+  --surface: #282a36;
+  --surface-2: #313341;
+  --surface-3: #3b3d4d;
+  --border: #44475a;
+  --border-subtle: #313341;
+  --text: #f8f8f2;
+  --text-strong: #ffffff;
+  --text-muted: #a3a8c8;
+  --text-faint: #6272a4;
+  --accent: #bd93f9;
+  --accent-strong: #d1b3ff;
+  --link: #8be9fd;
+  --code-bg: #191a21;
+  --code-text: #f8f8f2;
+  --input-bg: #1e1f29;
+  --input-border: #44475a;
+  --input-text: #f8f8f2;
+  --scrollbar-thumb: #44475a;
+  --scrollbar-thumb-hover: #565971;
+  --method-get: #8be9fd;
+  --method-post: #50fa7b;
+  --method-put: #f1fa8c;
+  --method-patch: #bd93f9;
+  --method-delete: #ff5555;
+  --method-head: #ff79c6;
+  --method-options: #ffb86c;
+  --status-ok: #50fa7b;
+  --status-warn: #f1fa8c;
+  --status-err: #ff5555;
+  --syntax-key: #8be9fd;
+  --syntax-string: #f1fa8c;
+  --syntax-number: #bd93f9;
+  --syntax-boolean: #ff79c6;
+  --syntax-comment: #6272a4;
+  --on-accent: #1e1f29;
+}
+:root[data-palette="dracula"][data-theme="light"] {
+  --bg: #f5f5fa;
+  --bg-gradient: radial-gradient(1200px 400px at 70% -10%, #e7e7f2 0%, transparent 60%);
+  --surface: #ffffff;
+  --surface-2: #f2f2f8;
+  --surface-3: #e9e9f2;
+  --border: #d5d5e4;
+  --border-subtle: #e9e9f2;
+  --text: #282a36;
+  --text-strong: #1e1f29;
+  --text-muted: #6272a4;
+  --text-faint: #8b93b5;
+  --accent: #7c4dcc;
+  --accent-strong: #6238ad;
+  --link: #1c7e8e;
+  --code-bg: #eeeef6;
+  --code-text: #282a36;
+  --input-bg: #ffffff;
+  --input-border: #d5d5e4;
+  --input-text: #282a36;
+  --scrollbar-thumb: #d5d5e4;
+  --scrollbar-thumb-hover: #b9b9d0;
+  --method-get: #1c7e8e;
+  --method-post: #1d8348;
+  --method-put: #9a7d0a;
+  --method-patch: #7c4dcc;
+  --method-delete: #cb3a3a;
+  --method-head: #c74e9b;
+  --method-options: #c07430;
+  --status-ok: #1d8348;
+  --status-warn: #9a7d0a;
+  --status-err: #cb3a3a;
+  --syntax-key: #1c7e8e;
+  --syntax-string: #7d6608;
+  --syntax-number: #7c4dcc;
+  --syntax-boolean: #c74e9b;
+  --syntax-comment: #6272a4;
+  --on-accent: #ffffff;
+}
+
+/* Catppuccin — Mocha (dark) / Latte (light) */
+:root[data-palette="catppuccin"],
+:root[data-palette="catppuccin"][data-theme="dark"] {
+  --bg: #181825;
+  --bg-gradient: radial-gradient(1200px 400px at 70% -10%, #1e1e2e 0%, transparent 60%);
+  --surface: #1e1e2e;
+  --surface-2: #262637;
+  --surface-3: #313244;
+  --border: #45475a;
+  --border-subtle: #313244;
+  --text: #cdd6f4;
+  --text-strong: #e6ecff;
+  --text-muted: #a6adc8;
+  --text-faint: #7f849c;
+  --accent: #cba6f7;
+  --accent-strong: #ddc2ff;
+  --link: #89b4fa;
+  --code-bg: #11111b;
+  --code-text: #cdd6f4;
+  --input-bg: #181825;
+  --input-border: #45475a;
+  --input-text: #cdd6f4;
+  --scrollbar-thumb: #45475a;
+  --scrollbar-thumb-hover: #585b70;
+  --method-get: #89b4fa;
+  --method-post: #a6e3a1;
+  --method-put: #f9e2af;
+  --method-patch: #94e2d5;
+  --method-delete: #f38ba8;
+  --method-head: #cba6f7;
+  --method-options: #fab387;
+  --status-ok: #a6e3a1;
+  --status-warn: #f9e2af;
+  --status-err: #f38ba8;
+  --syntax-key: #89b4fa;
+  --syntax-string: #a6e3a1;
+  --syntax-number: #fab387;
+  --syntax-boolean: #f38ba8;
+  --syntax-comment: #7f849c;
+  --on-accent: #11111b;
+}
+:root[data-palette="catppuccin"][data-theme="light"] {
+  --bg: #eff1f5;
+  --bg-gradient: radial-gradient(1200px 400px at 70% -10%, #e6e9ef 0%, transparent 60%);
+  --surface: #ffffff;
+  --surface-2: #eff1f5;
+  --surface-3: #e6e9ef;
+  --border: #ccd0da;
+  --border-subtle: #e6e9ef;
+  --text: #4c4f69;
+  --text-strong: #303446;
+  --text-muted: #6c6f85;
+  --text-faint: #9ca0b0;
+  --accent: #8839ef;
+  --accent-strong: #6f2dbd;
+  --link: #1e66f5;
+  --code-bg: #e6e9ef;
+  --code-text: #4c4f69;
+  --input-bg: #ffffff;
+  --input-border: #ccd0da;
+  --input-text: #4c4f69;
+  --scrollbar-thumb: #ccd0da;
+  --scrollbar-thumb-hover: #acb0be;
+  --method-get: #1e66f5;
+  --method-post: #40a02b;
+  --method-put: #df8e1d;
+  --method-patch: #179299;
+  --method-delete: #d20f39;
+  --method-head: #8839ef;
+  --method-options: #fe640b;
+  --status-ok: #40a02b;
+  --status-warn: #df8e1d;
+  --status-err: #d20f39;
+  --syntax-key: #1e66f5;
+  --syntax-string: #40a02b;
+  --syntax-number: #fe640b;
+  --syntax-boolean: #d20f39;
+  --syntax-comment: #6c6f85;
+  --on-accent: #ffffff;
 }
 
 /* ---------- base ---------- */
@@ -173,6 +424,24 @@ body, .sdui-header, .swagger-ui,
 #spec-select:hover { border-color: var(--accent); }
 #spec-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+#palette-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 7px 26px 7px 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23888f98' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+#palette-select:hover { border-color: var(--accent); }
+#palette-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .sdui-toggle, .sdui-gh {
   display: inline-flex;
   align-items: center;
@@ -219,7 +488,7 @@ body, .sdui-header, .swagger-ui,
 .sdui-seg button:hover { color: var(--text); }
 .sdui-seg button.active {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 #swagger-ui { max-width: 1460px; margin: 0 auto; padding: 8px 6px 80px; }
@@ -275,15 +544,33 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
-.sdui-editor-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+.sdui-doc-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-right: auto;
+  min-width: 0;
 }
-.sdui-editor-actions { display: flex; gap: 6px; }
+#doc-select, #doc-rename-input {
+  background: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 170px;
+  min-width: 90px;
+}
+#doc-select { cursor: pointer; appearance: none; -webkit-appearance: none; padding-right: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23888f98' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+}
+#doc-select:hover, #doc-rename-input:focus { border-color: var(--accent); }
+#doc-select[hidden], #doc-rename-input[hidden] { display: none; }
+
+.sdui-editor-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .sdui-tool-btn {
   background: var(--surface-3);
@@ -466,7 +753,7 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
 .swagger-ui .info .title small { background: var(--surface-3); }
 .swagger-ui .info .title small pre { color: var(--text-strong); background: transparent; }
 .swagger-ui .info .title small.version-stamp { background: var(--method-post); }
-.swagger-ui .info .title small.version-stamp pre { color: #ffffff; }
+.swagger-ui .info .title small.version-stamp pre { color: var(--on-accent); }
 
 /* markdown code inside descriptions */
 .swagger-ui .markdown code, .swagger-ui .renderedMarkdown code,
@@ -544,6 +831,7 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
   font-weight: 700;
   text-shadow: none;
   min-width: 84px;
+  color: var(--on-accent);
 }
 .swagger-ui .opblock .opblock-summary-path,
 .swagger-ui .opblock .opblock-summary-path__deprecated,
@@ -639,6 +927,30 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
   color: var(--code-text) !important;
   border-radius: 8px;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* request snippets (multi-language examples) */
+.swagger-ui .request-snippets {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.swagger-ui .request-snippets h4,
+.swagger-ui .request-snippets .request-snippets__title { color: var(--text-strong); }
+.swagger-ui .request-snippets pre { border-radius: 8px; }
+
+/* Language tab pills come with hardcoded inline styles from swagger-ui
+   (active: rgb(51,51,51), inactive: rgb(250,250,250)) — retheme them.
+   Safe to match on the inline values because the swagger-ui version is pinned. */
+.swagger-ui .request-snippets div[style*="rgb(51, 51, 51)"] {
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+  border-radius: 6px 6px 0 0;
+}
+.swagger-ui .request-snippets div[style*="rgb(250, 250, 250)"] {
+  background: var(--surface-3) !important;
+  color: var(--text) !important;
+  border-radius: 6px 6px 0 0;
 }
 
 .swagger-ui .copy-to-clipboard {
@@ -750,7 +1062,7 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
 .swagger-ui .btn.execute {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
 }
 .swagger-ui .btn.execute:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
 .swagger-ui .btn.cancel { border-color: var(--status-err); color: var(--status-err); background: transparent; }
