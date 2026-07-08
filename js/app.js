@@ -31,6 +31,8 @@
   var THEME_KEY = 'sdui-theme';
   var SPEC_KEY = 'sdui-spec';
   var CUSTOM_SPEC_KEY = 'sdui-custom-spec';
+  var LAYOUT_KEY = 'sdui-layout';
+  var LAYOUTS = ['editor', 'split', 'preview'];
   var RENDER_DEBOUNCE_MS = 700;
 
   var CUSTOM_TEMPLATE = [
@@ -101,6 +103,44 @@
   themeToggle.addEventListener('click', function () {
     var current = document.documentElement.getAttribute('data-theme');
     setTheme(current === 'dark' ? 'light' : 'dark');
+  });
+
+  /* ----- full screen ----- */
+
+  var fullscreenToggle = document.getElementById('fullscreen-toggle');
+  fullscreenToggle.addEventListener('click', function () {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen().catch(function () { /* unsupported */ });
+    }
+  });
+  document.addEventListener('fullscreenchange', function () {
+    document.documentElement.classList.toggle('is-fullscreen', !!document.fullscreenElement);
+  });
+
+  /* ----- editor layout (editor / split / preview) ----- */
+
+  var layoutSwitch = document.getElementById('layout-switch');
+  var layoutButtons = layoutSwitch.querySelectorAll('button');
+
+  function applyLayout(layout) {
+    if (LAYOUTS.indexOf(layout) === -1) layout = 'split';
+    document.body.setAttribute('data-layout', layout);
+    storageSet(LAYOUT_KEY, layout);
+    for (var i = 0; i < layoutButtons.length; i++) {
+      layoutButtons[i].classList.toggle('active',
+        layoutButtons[i].getAttribute('data-layout') === layout);
+    }
+    // CodeMirror must re-measure after its pane is resized or unhidden.
+    if (editor && layout !== 'preview') {
+      setTimeout(function () { editor.refresh(); }, 0);
+    }
+  }
+
+  layoutSwitch.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-layout]');
+    if (btn) applyLayout(btn.getAttribute('data-layout'));
   });
 
   /* ----- swagger ui ----- */
@@ -320,13 +360,16 @@
     var isCustom = specId === 'custom';
     editorPane.hidden = !isCustom;
     document.body.classList.toggle('editor-active', isCustom);
+    layoutSwitch.hidden = !isCustom;
 
     if (isCustom) {
       ensureEditor();
+      applyLayout(storageGet(LAYOUT_KEY) || 'split');
       editor.refresh();
       lastRenderedText = null; // force a fresh render when entering the editor
       renderEditorContent();
     } else {
+      document.body.removeAttribute('data-layout');
       renderFromUrl(specId);
     }
   }

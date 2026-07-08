@@ -193,6 +193,35 @@ body, .sdui-header, .swagger-ui,
 :root[data-theme="light"] .icon-moon { display: block; }
 :root[data-theme="light"] .icon-sun { display: none; }
 
+.icon-compress { display: none; }
+:root.is-fullscreen .icon-expand { display: none; }
+:root.is-fullscreen .icon-compress { display: block; }
+
+/* segmented layout switch (custom editor mode only) */
+.sdui-seg {
+  display: inline-flex;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--input-bg);
+}
+.sdui-seg[hidden] { display: none; }
+.sdui-seg button {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sdui-seg button + button { border-left: 1px solid var(--input-border); }
+.sdui-seg button:hover { color: var(--text); }
+.sdui-seg button.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
 #swagger-ui { max-width: 1460px; margin: 0 auto; padding: 8px 6px 80px; }
 
 /* ---------- workspace / custom spec editor ---------- */
@@ -221,6 +250,13 @@ body.editor-active #swagger-ui {
   background: var(--surface);
 }
 #editor-pane[hidden] { display: none; }
+
+/* single-pane layouts inside custom editor mode */
+body.editor-active[data-layout="editor"] #workspace,
+body.editor-active[data-layout="preview"] #workspace { grid-template-columns: 1fr; }
+body.editor-active[data-layout="editor"] #swagger-ui { display: none; }
+body.editor-active[data-layout="editor"] #editor-pane { border-right: none; }
+body.editor-active[data-layout="preview"] #editor-pane { display: none; }
 
 .sdui-editor-toolbar {
   display: flex;
@@ -318,6 +354,9 @@ body.editor-active #swagger-ui {
     grid-template-rows: minmax(260px, 45vh) 1fr;
     height: auto;
   }
+  body.editor-active[data-layout="editor"] #workspace,
+  body.editor-active[data-layout="preview"] #workspace { grid-template-rows: 1fr; }
+  body.editor-active[data-layout="editor"] #workspace { height: calc(100vh - 55px); }
   #editor-pane { border-right: none; border-bottom: 1px solid var(--border); }
   body.editor-active #swagger-ui { height: auto; }
 }
