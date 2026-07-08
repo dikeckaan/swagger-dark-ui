@@ -258,6 +258,14 @@ body.editor-active[data-layout="editor"] #swagger-ui { display: none; }
 body.editor-active[data-layout="editor"] #editor-pane { border-right: none; }
 body.editor-active[data-layout="preview"] #editor-pane { display: none; }
 
+/* preview-only: center the content like the ready-made spec views
+   (constrain the inner wrapper — auto margins on the grid item itself
+   would swallow the free space and collapse it) */
+body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
+  max-width: 1460px;
+  margin: 0 auto;
+}
+
 .sdui-editor-toolbar {
   display: flex;
   align-items: center;
