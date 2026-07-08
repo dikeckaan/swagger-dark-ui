@@ -195,6 +195,133 @@ body, .sdui-header, .swagger-ui,
 
 #swagger-ui { max-width: 1460px; margin: 0 auto; padding: 8px 6px 80px; }
 
+/* ---------- workspace / custom spec editor ---------- */
+
+body.editor-active #workspace {
+  display: grid;
+  grid-template-columns: minmax(360px, 44%) 1fr;
+  height: calc(100vh - 55px);
+}
+
+body.editor-active #swagger-ui {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  min-width: 0;
+  overflow-y: auto;
+  height: 100%;
+  padding: 8px 18px 80px;
+}
+
+#editor-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+#editor-pane[hidden] { display: none; }
+
+.sdui-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.sdui-editor-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+.sdui-editor-actions { display: flex; gap: 6px; }
+
+.sdui-tool-btn {
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sdui-tool-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+#editor-url-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+#editor-url-row[hidden] { display: none; }
+#editor-url-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+#editor-url-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+#editor-host { flex: 1; min-height: 0; }
+#editor-host .CodeMirror {
+  height: 100%;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  background: var(--code-bg);
+  color: var(--code-text);
+}
+#editor-host .CodeMirror-gutters {
+  background: var(--surface);
+  border-right: 1px solid var(--border-subtle);
+}
+#editor-host .CodeMirror-linenumber { color: var(--text-faint); }
+#editor-host .CodeMirror-cursor { border-left: 2px solid var(--accent); }
+#editor-host .CodeMirror-selected { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+#editor-host .CodeMirror-focused .CodeMirror-selected { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+#editor-host .CodeMirror-activeline-background { background: var(--surface-2); }
+#editor-host .cm-atom { color: var(--syntax-boolean); }
+#editor-host .cm-number { color: var(--syntax-number); }
+#editor-host .cm-string { color: var(--syntax-string); }
+#editor-host .cm-keyword { color: var(--syntax-key); }
+#editor-host .cm-def, #editor-host .cm-meta { color: var(--syntax-key); }
+#editor-host .cm-comment { color: var(--syntax-comment); font-style: italic; }
+#editor-host .cm-error { color: var(--status-err); }
+
+#editor-status {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#editor-status.ok { color: var(--status-ok); }
+#editor-status.err { color: var(--status-err); }
+#editor-status.busy { color: var(--status-warn); }
+
+@media (max-width: 900px) {
+  body.editor-active #workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(260px, 45vh) 1fr;
+    height: auto;
+  }
+  #editor-pane { border-right: none; border-bottom: 1px solid var(--border); }
+  body.editor-active #swagger-ui { height: auto; }
+}
+
 .sdui-load-error {
   margin: 40px auto;
   max-width: 620px;

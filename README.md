@@ -9,6 +9,7 @@ Swagger UI can render — deployed as a fully static site on GitHub Pages.
 
 - 🌗 **Dark theme by default**, with a light-mode toggle (preference persisted in `localStorage`)
 - 🔀 **Spec switcher** — flip between the full-feature demo API and the live Swagger Petstore (shareable via `?spec=` URL parameter)
+- ✏️ **Bring your own API** — a built-in split-pane YAML editor with live preview: paste or type a spec, open a local file, fetch one from a URL (CORS required), download your work; edits persist in `localStorage`
 - ⚡ **"Try it out" really works** — the demo API is backed by [httpbin.org](https://httpbin.org), which echoes every request; Petstore runs against the live `petstore3.swagger.io` server
 - 📦 **Zero build step** — plain HTML/CSS/JS with a pinned, SRI-verified `swagger-ui-dist` from CDN
 

@@ -19,6 +19,8 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.32.8/swagger-ui.css"
         integrity="sha384-9Q2fpS+xeS4ffJy6CagnwoUl+4ldAYhOs9pgZuEKxypVModhmZFzeMlvVsAjf7uT" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.20/codemirror.min.css"
+        integrity="sha384-zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT" crossorigin="anonymous" />
   <link rel="stylesheet" href="css/theme.css" />
 </head>
 <body>
@@ -38,6 +40,7 @@
         <select id="spec-select" aria-label="Select API specification">
           <option value="demo">Demo API — full feature showcase</option>
           <option value="petstore">Swagger Petstore (live)</option>
+          <option value="custom">My API — YAML editor</option>
         </select>
       </label>
       <button id="theme-toggle" class="sdui-toggle" type="button" aria-label="Toggle dark / light theme" title="Toggle theme">
@@ -62,10 +65,37 @@
     </div>
   </header>
 
-  <main id="swagger-ui" aria-live="polite"></main>
+  <div id="workspace">
+    <aside id="editor-pane" hidden>
+      <div class="sdui-editor-toolbar">
+        <span class="sdui-editor-title">OpenAPI source</span>
+        <div class="sdui-editor-actions">
+          <button id="editor-load-url" class="sdui-tool-btn" type="button" title="Fetch a spec from a URL into the editor">Load URL</button>
+          <button id="editor-open-file" class="sdui-tool-btn" type="button" title="Open a local YAML/JSON file">Open file</button>
+          <button id="editor-download" class="sdui-tool-btn" type="button" title="Download the current spec as YAML">Download</button>
+          <button id="editor-reset" class="sdui-tool-btn" type="button" title="Replace the editor content with the starter template">Reset</button>
+        </div>
+        <input id="editor-file-input" type="file" accept=".yaml,.yml,.json,.txt" hidden />
+      </div>
+      <div id="editor-url-row" hidden>
+        <input id="editor-url-input" type="url" placeholder="https://api.example.com/openapi.yaml (server must allow CORS)" spellcheck="false" />
+        <button id="editor-url-go" class="sdui-tool-btn" type="button">Fetch</button>
+        <button id="editor-url-cancel" class="sdui-tool-btn" type="button">Cancel</button>
+      </div>
+      <div id="editor-host"></div>
+      <div id="editor-status" class="ok" role="status">Valid — rendering live</div>
+    </aside>
+    <main id="swagger-ui" aria-live="polite"></main>
+  </div>
 
   <script src="https://unpkg.com/swagger-ui-dist@5.32.8/swagger-ui-bundle.js"
           integrity="sha384-IKpAWwsTL0pcw7/Amtnt2eXF4P1BK64WNuY2E/RG15SWLUW5HXzFuyqCSAr/DP8C" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.20/codemirror.min.js"
+          integrity="sha384-C7K/Pjo6rtJFtYWv792/hBOrCLhjcAa319ZhwjrDE8zCMEWglI7+S1CUEKD+q6uF" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.20/mode/yaml/yaml.min.js"
+          integrity="sha384-9q49Jm3hZMwxEMLImsxPxLiaptHpFz1PVa26Dg6SVIO+rj5kx0cgOM2+4ikKJFH9" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"
+          integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du" crossorigin="anonymous"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
