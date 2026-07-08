@@ -401,7 +401,6 @@ body.editor-active #swagger-ui {
 .swagger-ui .markdown a,
 .swagger-ui .renderedMarkdown a,
 .swagger-ui a,
-.swagger-ui .info .title small pre,
 .swagger-ui .response-col_links a { color: var(--link); }
 
 .swagger-ui .info { margin: 28px 0; }
@@ -414,7 +413,9 @@ body.editor-active #swagger-ui {
 
 /* version / deprecated badges */
 .swagger-ui .info .title small { background: var(--surface-3); }
+.swagger-ui .info .title small pre { color: var(--text-strong); background: transparent; }
 .swagger-ui .info .title small.version-stamp { background: var(--method-post); }
+.swagger-ui .info .title small.version-stamp pre { color: #ffffff; }
 
 /* markdown code inside descriptions */
 .swagger-ui .markdown code, .swagger-ui .renderedMarkdown code,

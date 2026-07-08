@@ -10,9 +10,15 @@ info:
     Welcome to the **Nova Commerce API** — a fictional but fully interactive API
     designed to showcase *everything* Swagger UI can render.
 
-    > 💡 **Try it out really works.** Every operation is served by
-    > [httpbin.org](https://httpbin.org), which echoes your request back, so you can
-    > experiment with parameters, bodies, and auth headers and see exactly what was sent.
+    > 💡 **Try it out really works — right inside your browser.** The default server is an
+    > **in-browser mock**: requests never leave this page. Operations with a documented
+    > response body return an example generated from their schema; the rest echo your
+    > request back (method, headers, body) so you can see exactly what was sent.
+    > Prefer a real network round-trip? Pick the [httpbin.org](https://httpbin.org)
+    > server from the *Servers* dropdown instead.
+    >
+    > 🎛️ Where an `X-Mock-Status` header parameter is available (e.g. `GET /users/{userId}`),
+    > set it to any documented status code — like `404` — to see that error response.
 
     ## What's demonstrated here
 
@@ -52,8 +58,10 @@ externalDocs:
   url: https://swagger.io/tools/swagger-ui/
 
 servers:
+  - url: https://mock.local
+    description: In-browser mock (default) — requests are answered locally and never leave this page
   - url: https://httpbin.org/anything
-    description: Echo server — every request returns a mirror of what you sent
+    description: Live echo server (optional) — httpbin.org mirrors your request back
   - url: https://{region}.httpbin.org/anything
     description: Regional echo server (demonstrates server variables)
     variables:
@@ -241,8 +249,21 @@ paths:
     get:
       tags: [Users]
       summary: Get a user by ID
-      description: Fetch a single user. Content negotiation is demonstrated — the response is available as JSON **or** XML.
+      description: |
+        Fetch a single user. Content negotiation is demonstrated — the response is
+        available as JSON **or** XML.
+
+        On the in-browser mock server, set the `X-Mock-Status` header to `404`
+        to see the error response instead of the success example.
       operationId: getUserById
+      parameters:
+        - name: X-Mock-Status
+          in: header
+          required: false
+          description: 'In-browser mock only: force a documented status code (e.g. `404`).'
+          schema:
+            type: string
+            enum: ['200', '404']
       responses:
         '200':
           description: The requested user

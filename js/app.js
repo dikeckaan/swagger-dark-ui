@@ -6,7 +6,8 @@
   var SPECS = {
     demo: {
       url: 'specs/demo-api.yaml',
-      label: 'Demo API — full feature showcase'
+      label: 'Demo API — full feature showcase',
+      mock: true // parse the document so the in-browser mock can answer requests
     },
     petstore: {
       url: 'https://petstore3.swagger.io/api/v3/openapi.json',
@@ -43,6 +44,10 @@
     '    Your edits are saved in this browser automatically. Use **Load URL**',
     '    to fetch a spec from your own server (it must allow CORS), **Open file**',
     '    to load a local YAML/JSON file, and **Download** to save your work.',
+    '',
+    '    Try it out works instantly: an **in-browser mock** server is added as the',
+    '    default, so requests are answered locally from your schemas and examples.',
+    '    Your own servers below stay selectable in the Servers dropdown.',
     'servers:',
     '  - url: https://api.example.com/v1',
     'paths:',
@@ -127,6 +132,16 @@
       document.title = SPECS[specId].label + ' · Swagger Dark UI';
     };
     window.ui = SwaggerUIBundle(config);
+
+    // Feed the parsed document to the in-browser mock so it can answer
+    // requests aimed at the mock server.
+    window.SduiMock.setSpec(null);
+    if (SPECS[specId].mock) {
+      fetch(SPECS[specId].url)
+        .then(function (res) { return res.text(); })
+        .then(function (text) { window.SduiMock.setSpec(jsyaml.load(text)); })
+        .catch(function () { /* mock stays disabled; live servers still work */ });
+    }
   }
 
   function renderFromObject(specObject) {
@@ -166,7 +181,18 @@
 
     if (text === lastRenderedText) return;
     lastRenderedText = text;
-    renderFromObject(parsed);
+
+    // Make the in-browser mock the default server (the user's own servers
+    // stay selectable in the Servers dropdown). Render-time only — the
+    // editor text and downloads are untouched.
+    var withMock = Object.assign({}, parsed);
+    withMock.servers = [{
+      url: window.SduiMock.ORIGIN,
+      description: 'In-browser mock (default) — requests never leave this page'
+    }].concat(parsed.servers || []);
+    window.SduiMock.setSpec(withMock);
+
+    renderFromObject(withMock);
     setEditorStatus('ok', 'Valid — rendering live');
   }
 
