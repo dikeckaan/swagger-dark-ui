@@ -210,7 +210,7 @@
 
     if (has(doc, 'openapi')) {
       if (typeof doc.openapi !== 'string') {
-        err(['openapi'], 'should be a string (quote it, e.g. "3.0.0" — unquoted 3.0 is parsed as a number)', 'quote-value');
+        err(['openapi'], 'should be a string (quote it, e.g. "3.0.3" — unquoted 3.0 is parsed as a number)', 'quote-value');
       } else if (!/^3\.\d+(\.\d+)?/.test(doc.openapi)) {
         err(['openapi'], '"' + doc.openapi + '" is not a valid OpenAPI 3 version');
       } else if (minor3 > 2) {
@@ -427,7 +427,8 @@
       } else if (!v.is2 && param.in === 'header' && typeof param.name === 'string' &&
           ['content-type', 'accept', 'authorization'].indexOf(param.name.toLowerCase()) !== -1) {
         warn(path, 'a header parameter named "' + param.name + '" is IGNORED by OpenAPI — ' +
-          'describe bodies with "content" media types and authentication with "components.securitySchemes"');
+          'describe bodies with "content" media types and authentication with "components.securitySchemes"',
+        'ignored-header', { key: param.name });
       }
       if (!v.is2) {
         checkExampleExclusivity(param, path, 'a parameter');

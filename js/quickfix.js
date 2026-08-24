@@ -71,6 +71,47 @@
   }
 
   var FIXES = {
+    'ignored-header': function (issue, text) {
+      var line = locate(text, issue.path); // the parameter's "- name: …" line
+      if (line === -1) return null;
+      return {
+        label: 'Remove this parameter',
+        apply: function () {
+          var lines = text.split('\n');
+          var end = ownBlockEnd(lines, line);
+          lines.splice(line, end - line);
+          var newText = lines.join('\n');
+          // If that was the only parameter, drop the now-empty "parameters:"
+          // key too — a null value would trade the warning for an error.
+          var listPath = issue.path.slice(0, -1);
+          var listLine = locate(newText, listPath);
+          if (listLine !== -1 && /parameters\s*:\s*$/.test(lines[listLine] || '')) {
+            var listEnd = ownBlockEnd(lines, listLine);
+            var hasChild = false;
+            for (var i = listLine + 1; i < listEnd; i++) {
+              if (!U().isBlank(lines[i])) { hasChild = true; break; }
+            }
+            if (!hasChild) {
+              lines.splice(listLine, 1);
+              newText = lines.join('\n');
+            }
+          }
+          return newText;
+        }
+      };
+    },
+
+    'add-openapi': function (issue, text) {
+      return {
+        label: 'Add openapi: 3.0.3',
+        apply: function () {
+          var lines = text.split('\n');
+          lines.unshift('openapi: 3.0.3');
+          return lines.join('\n');
+        }
+      };
+    },
+
     'bump-version': function (issue, text) {
       var to = issue.data && issue.data.to;
       if (!to || !/^3\.\d+\.\d+$/.test(to)) return null;
