@@ -111,9 +111,28 @@
             <button id="editor-insert" class="sdui-tool-btn" type="button" title="Insert OpenAPI building blocks — endpoints, operations, parameters, schemas…">＋ Insert</button>
             <div id="editor-insert-menu" class="sdui-menu" hidden></div>
           </div>
-          <button id="editor-undo" class="sdui-tool-btn" type="button" title="Undo (Ctrl/Cmd+Z)">↶ Undo</button>
-          <button id="editor-redo" class="sdui-tool-btn" type="button" title="Redo (Ctrl/Cmd+Shift+Z)">↷</button>
-          <button id="editor-copy" class="sdui-tool-btn" type="button" title="Copy the whole spec to the clipboard">⧉ Copy</button>
+          <div class="sdui-btn-group" role="group" aria-label="Edit history">
+            <button id="editor-undo" class="sdui-icon-btn" type="button" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo">
+              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                      d="M8.5 5.5 4 10l4.5 4.5M4 10h10a6 6 0 0 1 0 12h-3"/>
+              </svg>
+            </button>
+            <button id="editor-redo" class="sdui-icon-btn" type="button" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo">
+              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                      d="M15.5 5.5 20 10l-4.5 4.5M20 10H10a6 6 0 0 0 0 12h3"/>
+              </svg>
+            </button>
+          </div>
+          <button id="editor-copy" class="sdui-tool-btn sdui-btn-icon-label" type="button" title="Copy the whole spec to the clipboard">
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+          </button>
           <button id="editor-share" class="sdui-tool-btn" type="button" title="Copy a shareable link that embeds this spec">Share</button>
           <button id="editor-convert" class="sdui-tool-btn" type="button" title="Convert between YAML and JSON">To JSON</button>
           <button id="editor-load-url" class="sdui-tool-btn" type="button" title="Fetch a spec from a URL into the editor">Load URL</button>

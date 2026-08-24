@@ -545,14 +545,23 @@
       SduiConstraints.init({ editor: editor, setStatus: setEditorStatus });
     }
 
-    document.getElementById('editor-undo').addEventListener('click', function () {
+    var undoBtn = document.getElementById('editor-undo');
+    var redoBtn = document.getElementById('editor-redo');
+    function syncHistoryButtons() {
+      var h = editor.historySize();
+      undoBtn.disabled = !h.undo;
+      redoBtn.disabled = !h.redo;
+    }
+    undoBtn.addEventListener('click', function () {
       editor.undo();
       editor.focus();
     });
-    document.getElementById('editor-redo').addEventListener('click', function () {
+    redoBtn.addEventListener('click', function () {
       editor.redo();
       editor.focus();
     });
+    editor.on('change', function () { setTimeout(syncHistoryButtons, 0); });
+    syncHistoryButtons();
     document.getElementById('editor-copy').addEventListener('click', function () {
       copyText(editor.getValue()).then(function () {
         setEditorStatus('ok', 'Spec copied to the clipboard');

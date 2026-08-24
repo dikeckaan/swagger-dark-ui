@@ -603,6 +603,34 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
 }
 .sdui-tool-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+/* joined icon-button group (undo/redo) + icon-with-label buttons */
+.sdui-btn-group {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.sdui-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 9px;
+  background: var(--surface-3);
+  color: var(--text);
+  border: none;
+  cursor: pointer;
+  line-height: 0;
+}
+.sdui-icon-btn + .sdui-icon-btn { border-left: 1px solid var(--border); }
+.sdui-icon-btn:hover:not(:disabled) { color: var(--accent); background: var(--surface-2); }
+.sdui-icon-btn:disabled { opacity: 0.35; cursor: default; }
+.sdui-btn-icon-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sdui-btn-icon-label svg { flex: none; }
+
 #editor-url-row {
   display: flex;
   gap: 6px;
