@@ -177,23 +177,64 @@
     return undefined;
   }
 
+  /* Transport/noise headers that would clutter a response's documented
+     headers (Content-Type is already the media type key). */
+  var NOISE_HEADERS = /^(content-type|content-length|content-encoding|date|connection|server|transfer-encoding|keep-alive|vary|etag|age|x-powered-by|access-control-|cf-|set-cookie|strict-transport-security|alt-svc|nel|report-to|x-content-type-options|x-frame-options|x-xss-protection)/i;
+
   function responsesFromSaved(saved) {
-    var responses = {};
+    // Group by status code, then media type: several saved responses can
+    // document VARIANTS of the same status — those become OpenAPI's named
+    // "examples" map (rendered as a dropdown), a single one stays a plain
+    // "example". Meaningful response headers are kept as response headers.
+    var byCode = {};
     (saved || []).forEach(function (res) {
       if (!res) return;
       var code = String(res.code || 200);
       var mediaType = 'application/json';
       (res.header || []).forEach(function (h) {
-        if (h && /^content-type$/i.test(h.key)) mediaType = String(h.value).split(';')[0];
+        if (h && /^content-type$/i.test(h.key)) mediaType = String(h.value).split(';')[0].trim();
+      });
+      var entry = byCode[code] || (byCode[code] = { names: [], status: undefined, media: {}, headers: {} });
+      entry.names.push(res.name);
+      if (res.status && !entry.status) entry.status = res.status;
+      (res.header || []).forEach(function (h) {
+        if (!h || !h.key || NOISE_HEADERS.test(h.key) || entry.headers[h.key]) return;
+        entry.headers[h.key] = {
+          schema: { type: 'string' },
+          example: h.value || undefined
+        };
       });
       var body = res.body;
-      var example = mediaType.indexOf('json') !== -1 ? (tryParseJson(body) !== undefined ? tryParseJson(body) : body) : body;
-      var entry = responses[code] || { description: res.name || res.status || 'Response' };
-      if (body !== undefined && body !== null && body !== '') {
-        entry.content = entry.content || {};
-        entry.content[mediaType] = { example: example };
-      }
-      responses[code] = entry;
+      if (body === undefined || body === null || body === '') return;
+      var example = mediaType.indexOf('json') !== -1 && tryParseJson(body) !== undefined
+        ? tryParseJson(body) : body;
+      (entry.media[mediaType] = entry.media[mediaType] || []).push({ name: res.name, example: example });
+    });
+
+    var responses = {};
+    Object.keys(byCode).forEach(function (code) {
+      var e = byCode[code];
+      var single = e.names.length === 1;
+      var out = { description: (single && e.names[0]) || e.status || 'Response' };
+      Object.keys(e.media).forEach(function (mt) {
+        var list = e.media[mt];
+        out.content = out.content || {};
+        if (list.length === 1) {
+          out.content[mt] = { example: list[0].example };
+        } else {
+          var examples = {};
+          var used = {};
+          list.forEach(function (item, i) {
+            var name = item.name || 'Example ' + (i + 1);
+            if (used[name]) name += ' (' + (++used[name]) + ')';
+            else used[name] = 1;
+            examples[name] = { value: item.example };
+          });
+          out.content[mt] = { examples: examples };
+        }
+      });
+      if (Object.keys(e.headers).length) out.headers = e.headers;
+      responses[code] = out;
     });
     if (!Object.keys(responses).length) {
       responses['200'] = { description: 'Successful response' };
