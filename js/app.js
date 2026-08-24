@@ -85,6 +85,7 @@
   var editorPane = document.getElementById('editor-pane');
   var editorStatus = document.getElementById('editor-status');
   var editorIssues = document.getElementById('editor-issues');
+  var issuesHandle = document.getElementById('issues-handle');
   var fileInput = document.getElementById('editor-file-input');
 
   var editor = null;        // CodeMirror instance, created lazily
@@ -350,13 +351,35 @@
     issueMarks = [];
     editorIssues.innerHTML = '';
     editorIssues.hidden = true;
+    issuesHandle.hidden = true;
     document.getElementById('editor-convert20').hidden = true;
   }
 
-  function showIssues(issues, text) {
+  /* Dismissed warnings are remembered per saved document (persisted with
+     it), keyed by a stable path+message signature — not by line number,
+     so they survive edits elsewhere in the file. */
+  function issueSig(issue) {
+    return issue.path.join('.') + '|' + issue.message;
+  }
+
+  function dismissWarning(issue) {
+    var doc = docs[activeDocId()];
+    doc.dismissed = (doc.dismissed || []).concat([issueSig(issue)]);
+    saveDocs();
+    renderNow();
+  }
+
+  function restoreWarnings() {
+    docs[activeDocId()].dismissed = [];
+    saveDocs();
+    renderNow();
+  }
+
+  function showIssues(issues, text, hiddenCount) {
     clearIssues();
-    if (!issues.length) return;
+    if (!issues.length && !hiddenCount) return;
     editorIssues.hidden = false;
+    issuesHandle.hidden = false;
     issues.forEach(function (issue) {
       var line = window.SduiValidate ? SduiValidate.locate(text, issue.path) : -1;
       var li = document.createElement('li');
@@ -395,6 +418,19 @@
       where.textContent = line !== -1 ? 'line ' + (line + 1) : (issue.path.join('.') || 'document');
       li.appendChild(where);
 
+      if (issue.severity === 'warning') {
+        var dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'sdui-issue-dismiss';
+        dismissBtn.title = 'Hide this warning (restorable below)';
+        dismissBtn.textContent = '×';
+        dismissBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          dismissWarning(issue);
+        });
+        li.appendChild(dismissBtn);
+      }
+
       if (line !== -1) {
         li.addEventListener('click', function () { flashEditorLine(line); });
         var cls = issue.severity === 'error' ? 'cm-issue-error' : 'cm-issue-warn';
@@ -402,6 +438,18 @@
       }
       editorIssues.appendChild(li);
     });
+
+    if (hiddenCount) {
+      var restoreRow = document.createElement('li');
+      restoreRow.className = 'sdui-issue-restore';
+      restoreRow.textContent = hiddenCount + ' hidden warning' + (hiddenCount === 1 ? '' : 's') + ' — ';
+      var restoreBtn = document.createElement('button');
+      restoreBtn.type = 'button';
+      restoreBtn.textContent = 'show ' + (hiddenCount === 1 ? 'it' : 'them') + ' again';
+      restoreBtn.addEventListener('click', restoreWarnings);
+      restoreRow.appendChild(restoreBtn);
+      editorIssues.appendChild(restoreRow);
+    }
   }
 
   function renderEditorContent() {
@@ -466,24 +514,43 @@
       try { issues = SduiValidate.validate(parsed); }
       catch (lintErr) { /* a linter bug must not block rendering */ }
     }
-    showIssues(issues, text);
+    // Hide warnings the user dismissed for this document; prune signatures
+    // that no longer fire so the stored list can't grow without bound.
+    var dismissed = doc.dismissed || [];
+    if (dismissed.length) {
+      var firing = {};
+      issues.forEach(function (issue) { firing[issueSig(issue)] = true; });
+      var pruned = dismissed.filter(function (sig) { return firing[sig]; });
+      if (pruned.length !== dismissed.length) {
+        doc.dismissed = pruned;
+        saveDocs();
+      }
+      dismissed = pruned;
+    }
+    var visible = issues.filter(function (issue) {
+      return issue.severity !== 'warning' || dismissed.indexOf(issueSig(issue)) === -1;
+    });
+    var hiddenCount = issues.length - visible.length;
+
+    showIssues(visible, text, hiddenCount);
     // Accept the unquoted "swagger: 2.0" too — YAML parses it as the number 2.
     document.getElementById('editor-convert20').hidden =
       parsed.swagger === undefined || !/^2(\.|$)/.test(String(parsed.swagger));
     var errorCount = 0;
     var warningCount = 0;
-    issues.forEach(function (issue) {
+    visible.forEach(function (issue) {
       if (issue.severity === 'error') errorCount++; else warningCount++;
     });
+    var hiddenNote = hiddenCount ? ' (' + hiddenCount + ' hidden)' : '';
     if (errorCount) {
       setEditorStatus('err', errorCount + ' error' + (errorCount === 1 ? '' : 's') +
         (warningCount ? ', ' + warningCount + ' warning' + (warningCount === 1 ? '' : 's') : '') +
-        ' — still rendering; click an issue to jump to its line');
+        hiddenNote + ' — still rendering; click an issue to jump to its line');
     } else if (warningCount) {
       setEditorStatus('warn', warningCount + ' warning' + (warningCount === 1 ? '' : 's') +
-        ' — rendering live; click an issue to jump to its line');
+        hiddenNote + ' — rendering live; click an issue to jump to its line');
     } else {
-      setEditorStatus('ok', 'Valid — rendering live');
+      setEditorStatus('ok', 'Valid — rendering live' + hiddenNote);
     }
 
     if (text === lastRenderedText) return;
@@ -549,6 +616,73 @@
     if (window.SduiConstraints) {
       SduiConstraints.init({ editor: editor, setStatus: setEditorStatus });
     }
+
+    /* ----- drag-to-resize: editor/preview split + issues panel ----- */
+
+    function initDrag(handle, opts) {
+      var refreshTimer = null;
+      handle.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add('dragging');
+        function onMove(ev) {
+          opts.move(ev);
+          clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(function () { editor.refresh(); }, 80);
+        }
+        function onUp() {
+          handle.classList.remove('dragging');
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onUp);
+          handle.removeEventListener('pointercancel', onUp);
+          editor.refresh();
+        }
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
+      });
+      handle.addEventListener('dblclick', function () {
+        opts.reset();
+        editor.refresh();
+      });
+    }
+
+    var workspace = document.getElementById('workspace');
+    var savedSplit = parseInt(storageGet('sdui-split-w'), 10);
+    if (savedSplit) workspace.style.setProperty('--split-w', savedSplit + 'px');
+    initDrag(document.getElementById('split-handle'), {
+      move: function (e) {
+        var rect = workspace.getBoundingClientRect();
+        var w = Math.min(Math.max(e.clientX - rect.left, 300), Math.max(rect.width - 360, 300));
+        workspace.style.setProperty('--split-w', w + 'px');
+        storageSet('sdui-split-w', String(Math.round(w)));
+      },
+      reset: function () {
+        workspace.style.removeProperty('--split-w');
+        try { localStorage.removeItem('sdui-split-w'); } catch (e) { /* ignore */ }
+      }
+    });
+
+    function applyIssuesHeight(h) {
+      editorIssues.style.setProperty('--issues-h', h + 'px');
+      editorIssues.classList.add('resized');
+    }
+    var savedIssuesH = parseInt(storageGet('sdui-issues-h'), 10);
+    if (savedIssuesH) applyIssuesHeight(savedIssuesH);
+    initDrag(issuesHandle, {
+      move: function (e) {
+        var rect = editorIssues.getBoundingClientRect();
+        var paneRect = editorPane.getBoundingClientRect();
+        var h = Math.min(Math.max(rect.bottom - e.clientY, 48), paneRect.height - 160);
+        applyIssuesHeight(h);
+        storageSet('sdui-issues-h', String(Math.round(h)));
+      },
+      reset: function () {
+        editorIssues.classList.remove('resized');
+        editorIssues.style.removeProperty('--issues-h');
+        try { localStorage.removeItem('sdui-issues-h'); } catch (e) { /* ignore */ }
+      }
+    });
 
     var undoBtn = document.getElementById('editor-undo');
     var redoBtn = document.getElementById('editor-redo');
