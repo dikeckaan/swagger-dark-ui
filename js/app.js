@@ -350,6 +350,7 @@
     issueMarks = [];
     editorIssues.innerHTML = '';
     editorIssues.hidden = true;
+    document.getElementById('editor-convert20').hidden = true;
   }
 
   function showIssues(issues, text) {
@@ -371,6 +372,23 @@
       msg.className = 'sdui-issue-msg';
       msg.textContent = issue.message;
       li.appendChild(msg);
+
+      var fix = window.SduiQuickfix ? SduiQuickfix.fixFor(issue, text) : null;
+      if (fix) {
+        var fixBtn = document.createElement('button');
+        fixBtn.type = 'button';
+        fixBtn.className = 'sdui-issue-fix';
+        fixBtn.textContent = 'Fix: ' + fix.label;
+        fixBtn.addEventListener('click', function (e) {
+          e.stopPropagation(); // don't also jump the cursor
+          var fixed = fix.apply();
+          if (fixed && fixed !== text) {
+            editor.setValue(fixed); // one undoable operation
+            renderNow(); // re-validates, so the status and issue list update
+          }
+        });
+        li.appendChild(fixBtn);
+      }
 
       var where = document.createElement('span');
       where.className = 'sdui-issue-where';
@@ -443,6 +461,7 @@
       catch (lintErr) { /* a linter bug must not block rendering */ }
     }
     showIssues(issues, text);
+    document.getElementById('editor-convert20').hidden = parsed.swagger !== '2.0';
     var errorCount = 0;
     var warningCount = 0;
     issues.forEach(function (issue) {
@@ -461,6 +480,9 @@
 
     if (text === lastRenderedText) return;
     lastRenderedText = text;
+
+    // Rate-limited automatic snapshot for the History dropdown.
+    if (window.SduiHistory) SduiHistory.record(activeDocId(), text);
 
     // Make the in-browser mock the default server and offer a free-text
     // "your own server" entry; the user's own servers stay selectable.
@@ -511,6 +533,41 @@
     wireDocControls();
     refreshDocSelect();
     updateConvertLabel();
+
+    if (window.SduiComplete && CodeMirror.showHint) {
+      SduiComplete.init(editor);
+    }
+
+    if (window.SduiExport) {
+      SduiExport.init({
+        button: document.getElementById('editor-export'),
+        menu: document.getElementById('editor-export-menu'),
+        getText: function () { return editor.getValue(); },
+        setStatus: setEditorStatus
+      });
+    }
+
+    if (window.SduiHistory) {
+      SduiHistory.init({
+        button: document.getElementById('doc-history'),
+        menu: document.getElementById('doc-history-menu'),
+        getDocId: activeDocId,
+        getText: function () { return editor.getValue(); },
+        setText: function (text) { editor.setValue(text); renderNow(); },
+        setStatus: setEditorStatus
+      });
+    }
+
+    document.getElementById('editor-convert20-go').addEventListener('click', function () {
+      try {
+        var converted = SduiConvert20.toYaml(jsyaml.load(editor.getValue()));
+        editor.setValue(converted); // single undo step brings 2.0 back
+        renderNow();
+        setEditorStatus('ok', 'Converted to OpenAPI 3.0 — review the result (Ctrl/Cmd+Z restores the original)');
+      } catch (convErr) {
+        setEditorStatus('err', 'Conversion failed: ' + convErr.message);
+      }
+    });
 
     if (window.SduiSnippets) {
       SduiSnippets.init({
@@ -682,6 +739,7 @@
         delete docs[activeDocId()];
         if (!Object.keys(docs).length) addDoc('My API', CUSTOM_TEMPLATE);
         saveDocs();
+        if (window.SduiHistory) SduiHistory.prune(Object.keys(docs));
         storageSet(ACTIVE_DOC_KEY, Object.keys(docs)[0]);
         refreshDocSelect();
         switchDoc(activeDocId());

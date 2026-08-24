@@ -21,10 +21,11 @@
     })();
   </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.32.8/swagger-ui.css"
-        integrity="sha384-9Q2fpS+xeS4ffJy6CagnwoUl+4ldAYhOs9pgZuEKxypVModhmZFzeMlvVsAjf7uT" crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.20/codemirror.min.css"
-        integrity="sha384-zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT" crossorigin="anonymous" />
+  <!-- Third-party assets are vendored (see vendor/README.md for versions and
+       upstream SRI hashes), so the site works fully offline / air-gapped. -->
+  <link rel="stylesheet" href="vendor/swagger-ui.css" />
+  <link rel="stylesheet" href="vendor/codemirror.min.css" />
+  <link rel="stylesheet" href="vendor/show-hint.min.css" />
   <link rel="stylesheet" href="css/theme.css" />
 </head>
 <body>
@@ -100,6 +101,10 @@
           <button id="doc-new" class="sdui-tool-btn" type="button" title="Create a new spec from the starter template">New</button>
           <button id="doc-rename" class="sdui-tool-btn" type="button" title="Rename this spec">Rename</button>
           <button id="doc-delete" class="sdui-tool-btn" type="button" title="Delete this spec">Delete</button>
+          <div class="sdui-insert">
+            <button id="doc-history" class="sdui-tool-btn" type="button" title="Snapshots of this spec — restore or diff">History</button>
+            <div id="doc-history-menu" class="sdui-menu" hidden></div>
+          </div>
         </div>
         <div class="sdui-editor-actions">
           <div class="sdui-insert">
@@ -111,6 +116,10 @@
           <button id="editor-load-url" class="sdui-tool-btn" type="button" title="Fetch a spec from a URL into the editor">Load URL</button>
           <button id="editor-open-file" class="sdui-tool-btn" type="button" title="Open a local YAML/JSON file">Open file</button>
           <button id="editor-download" class="sdui-tool-btn" type="button" title="Download the current spec (Cmd/Ctrl+S)">Download</button>
+          <div class="sdui-insert">
+            <button id="editor-export" class="sdui-tool-btn" type="button" title="Export as a Postman collection or standalone HTML docs">Export</button>
+            <div id="editor-export-menu" class="sdui-menu" hidden></div>
+          </div>
           <button id="editor-reset" class="sdui-tool-btn" type="button" title="Replace the editor content with the starter template">Reset</button>
         </div>
         <input id="editor-file-input" type="file" accept=".yaml,.yml,.json,.txt" hidden />
@@ -121,24 +130,29 @@
         <button id="editor-url-cancel" class="sdui-tool-btn" type="button">Cancel</button>
       </div>
       <div id="editor-host"></div>
+      <div id="editor-convert20" hidden>
+        <span>This is a Swagger 2.0 document — the editor's tooling targets OpenAPI 3.</span>
+        <button id="editor-convert20-go" class="sdui-tool-btn" type="button">Convert to OpenAPI 3</button>
+      </div>
       <ul id="editor-issues" aria-label="Validation issues" hidden></ul>
       <div id="editor-status" class="ok" role="status">Valid — rendering live</div>
     </aside>
     <main id="swagger-ui" aria-live="polite"></main>
   </div>
 
-  <script src="https://unpkg.com/swagger-ui-dist@5.32.8/swagger-ui-bundle.js"
-          integrity="sha384-IKpAWwsTL0pcw7/Amtnt2eXF4P1BK64WNuY2E/RG15SWLUW5HXzFuyqCSAr/DP8C" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.20/codemirror.min.js"
-          integrity="sha384-C7K/Pjo6rtJFtYWv792/hBOrCLhjcAa319ZhwjrDE8zCMEWglI7+S1CUEKD+q6uF" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.20/mode/yaml/yaml.min.js"
-          integrity="sha384-9q49Jm3hZMwxEMLImsxPxLiaptHpFz1PVa26Dg6SVIO+rj5kx0cgOM2+4ikKJFH9" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"
-          integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"
-          integrity="sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7" crossorigin="anonymous"></script>
+  <script src="vendor/swagger-ui-bundle.js"></script>
+  <script src="vendor/codemirror.min.js"></script>
+  <script src="vendor/yaml.min.js"></script>
+  <script src="vendor/show-hint.min.js"></script>
+  <script src="vendor/js-yaml.min.js"></script>
+  <script src="vendor/lz-string.min.js"></script>
   <script src="js/validate.js"></script>
   <script src="js/snippets.js"></script>
+  <script src="js/autocomplete.js"></script>
+  <script src="js/quickfix.js"></script>
+  <script src="js/convert20.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/export.js"></script>
   <script src="js/mock.js"></script>
   <script src="js/postman.js"></script>
   <script src="js/app.js"></script>

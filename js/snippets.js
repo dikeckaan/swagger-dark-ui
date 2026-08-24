@@ -571,6 +571,85 @@
     };
   }
 
+  /* ----- "example from schema": derive an example for the media type or
+     parameter under the cursor, using the mock's schema->example logic ----- */
+
+  function collectExampleTargets(doc) {
+    var out = [];
+    function fromContent(node, base) {
+      if (!node || typeof node !== 'object' || !node.content || typeof node.content !== 'object') return;
+      Object.keys(node.content).forEach(function (mime) {
+        var mt = node.content[mime];
+        if (mt && typeof mt === 'object') out.push({ path: base.concat('content', mime), node: mt });
+      });
+    }
+    function fromParams(list, base) {
+      if (!Array.isArray(list)) return;
+      list.forEach(function (p, i) {
+        if (p && typeof p === 'object' && p.schema) out.push({ path: base.concat(i), node: p });
+      });
+    }
+    if (doc.paths && typeof doc.paths === 'object') {
+      Object.keys(doc.paths).forEach(function (p) {
+        var item = doc.paths[p];
+        if (!item || typeof item !== 'object') return;
+        fromParams(item.parameters, ['paths', p, 'parameters']);
+        METHODS.concat(['options', 'head', 'trace']).forEach(function (m) {
+          var op = item[m];
+          if (!op || typeof op !== 'object') return;
+          fromParams(op.parameters, ['paths', p, m, 'parameters']);
+          fromContent(op.requestBody, ['paths', p, m, 'requestBody']);
+          if (op.responses && typeof op.responses === 'object') {
+            Object.keys(op.responses).forEach(function (code) {
+              fromContent(op.responses[code], ['paths', p, m, 'responses', code]);
+            });
+          }
+        });
+      });
+    }
+    var c = doc.components || {};
+    ['requestBodies', 'responses'].forEach(function (sec) {
+      if (c[sec] && typeof c[sec] === 'object') {
+        Object.keys(c[sec]).forEach(function (n) {
+          fromContent(c[sec][n], ['components', sec, n]);
+        });
+      }
+    });
+    return out;
+  }
+
+  function generateExample(lines, doc, cursorLine, text) {
+    if (!window.SduiValidate || !window.SduiMock) return { error: 'example generation is unavailable' };
+    var best = null;
+    collectExampleTargets(doc).forEach(function (t) {
+      var line = SduiValidate.locate(text, t.path);
+      if (line === -1) return;
+      var end = blockEnd(lines, line + 1, indentOf(lines[line]));
+      if (cursorLine >= line && cursorLine < end && (!best || line > best.line)) {
+        best = { line: line, end: end, node: t.node };
+      }
+    });
+    if (!best) {
+      return { error: 'place the cursor inside a media type (under "content:") or a parameter with a schema' };
+    }
+    if (best.node.example !== undefined || best.node.examples !== undefined) {
+      return { error: 'this block already has an example' };
+    }
+    if (!best.node.schema) return { error: 'no "schema" here to derive an example from' };
+    var value = SduiMock.exampleFromSchema(best.node.schema, doc);
+    if (value === undefined) {
+      return { error: 'could not derive an example from this schema (add "type" or "properties")' };
+    }
+    var yamlText = jsyaml.dump({ example: value }, { lineWidth: 100, noRefs: true });
+    return {
+      insertions: [{
+        at: appendAt(lines, best.line + 1, best.end),
+        lines: reindent(yamlText, childIndent(lines, best.line, best.end))
+      }],
+      message: 'Inserted an example derived from the schema'
+    };
+  }
+
   /* ================= planning entry point ================= */
 
   function plan(text, cursorLine, actionId) {
@@ -598,6 +677,7 @@
       case 'server': return addListItem(lines, doc, 'servers', SERVER_TEMPLATE, 'https://api.example.com/v1', 'Inserted a server — replace the URL with yours');
       case 'tag': return addListItem(lines, doc, 'tags', TAG_TEMPLATE, 'newTag', 'Inserted a tag — reference it from operations with "tags: [newTag]"');
       case 'crud': return crudResource(lines, doc);
+      case 'genExample': return generateExample(lines, doc, cursorLine, text);
       default: return { error: 'unknown insert action' };
     }
   }
@@ -613,6 +693,7 @@
     { label: 'Request body (JSON)', id: 'requestBody' },
     { label: 'Response (into the operation under the cursor)', sub: ['200', '201', '204', '400', '401', '404', 'default'].map(function (c) { return { label: c, id: 'response:' + c }; }) },
     { label: 'Schema (components.schemas)', id: 'schema' },
+    { label: 'Example from the schema under the cursor', id: 'genExample' },
     {
       label: 'Security scheme',
       sub: [
@@ -737,5 +818,16 @@
     }
   }
 
-  window.SduiSnippets = { init: init, plan: plan, MENU: MENU };
+  window.SduiSnippets = {
+    init: init,
+    plan: plan,
+    MENU: MENU,
+    // Low-level text helpers, shared with the quick-fix and exporter modules.
+    util: {
+      indentOf: indentOf, isBlank: isBlank, pad: pad, blockEnd: blockEnd,
+      appendAt: appendAt, childIndent: childIndent, ensureChain: ensureChain,
+      reindent: reindent, findTopKey: findTopKey, sectionValue: sectionValue,
+      stripEmptyFlow: stripEmptyFlow
+    }
+  };
 })();

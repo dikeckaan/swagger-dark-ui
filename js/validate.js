@@ -74,22 +74,28 @@
     // Unknown 3.x minor versions get the 3.1 rule set (the most permissive).
     if (!v.is3 && !v.is2 && /^3\./.test(ver)) { v.is31 = true; v.is3 = true; }
 
-    function err(path, message) { issues.push({ path: path, message: message, severity: 'error' }); }
-    function warn(path, message) { issues.push({ path: path, message: message, severity: 'warning' }); }
+    /* `code` and `data` are machine-readable handles for quick fixes. */
+    function err(path, message, code, data) {
+      issues.push({ path: path, message: message, severity: 'error', code: code, data: data });
+    }
+    function warn(path, message, code, data) {
+      issues.push({ path: path, message: message, severity: 'warning', code: code, data: data });
+    }
 
     function checkKeys(obj, path, allowed, what) {
       Object.keys(obj).forEach(function (k) {
         if (!isExt(k) && allowed.indexOf(k) === -1) {
-          err(path.concat(k), 'should NOT have additional property "' + k + '" (not allowed in ' + what + ')');
+          err(path.concat(k), 'should NOT have additional property "' + k + '" (not allowed in ' + what + ')',
+            'additional-prop', { key: k });
         }
       });
     }
 
     /* An object was expected. Returns true when it is safe to recurse. */
-    function expectObj(value, path, what) {
+    function expectObj(value, path, what, code) {
       if (isObj(value)) return true;
       err(path, what + ' should be an object' +
-        (value === null ? ' — it is empty (did you forget to indent its contents?)' : ''));
+        (value === null ? ' — it is empty (did you forget to indent its contents?)' : ''), code);
       return false;
     }
 
@@ -97,7 +103,7 @@
 
     if (has(doc, 'openapi')) {
       if (typeof doc.openapi !== 'string') {
-        err(['openapi'], 'should be a string (quote it, e.g. "3.0.0" — unquoted 3.0 is parsed as a number)');
+        err(['openapi'], 'should be a string (quote it, e.g. "3.0.0" — unquoted 3.0 is parsed as a number)', 'quote-value');
       } else if (!/^3\.\d+(\.\d+)?/.test(doc.openapi)) {
         err(['openapi'], '"' + doc.openapi + '" is not a valid OpenAPI 3 version');
       }
@@ -111,15 +117,15 @@
     checkKeys(doc, [], rootAllowed, 'an OpenAPI document');
 
     if (!has(doc, 'info')) {
-      err([], '"info" is required');
+      err([], '"info" is required', 'missing-info');
     } else if (expectObj(doc.info, ['info'], '"info"')) {
       checkKeys(doc.info, ['info'], KEYS.info.concat(v.is31 ? KEYS.info31 : []), 'the Info Object');
-      if (!has(doc.info, 'title')) err(['info'], '"info.title" is required');
+      if (!has(doc.info, 'title')) err(['info'], '"info.title" is required', 'missing-title');
       else if (typeof doc.info.title !== 'string') err(['info', 'title'], 'should be a string');
       if (!has(doc.info, 'version')) {
-        err(['info'], '"info.version" is required');
+        err(['info'], '"info.version" is required', 'missing-version');
       } else if (typeof doc.info.version !== 'string') {
-        err(['info', 'version'], 'should be a string (quote it, e.g. "1.0" — unquoted it is parsed as a number)');
+        err(['info', 'version'], 'should be a string (quote it, e.g. "1.0" — unquoted it is parsed as a number)', 'quote-value');
       }
       if (isObj(doc.info.contact)) checkKeys(doc.info.contact, ['info', 'contact'], KEYS.contact, 'the Contact Object');
       if (isObj(doc.info.license)) {
@@ -151,7 +157,7 @@
         Object.keys(req).forEach(function (name) {
           if (schemeNames.indexOf(name) === -1) {
             err(path.concat(i), 'security requirement "' + name + '" must match a security scheme declared in ' +
-              (v.is2 ? '"securityDefinitions"' : '"components.securitySchemes"'));
+              (v.is2 ? '"securityDefinitions"' : '"components.securitySchemes"'), 'security-undefined', { name: name });
           }
           if (!Array.isArray(req[name])) {
             err(path.concat(i, name), 'the scopes of a security requirement should be an array (use [] for none)');
@@ -218,7 +224,7 @@
 
     function checkExampleExclusivity(obj, path, what) {
       if (has(obj, 'example') && has(obj, 'examples')) {
-        err(path, what + ' should not have both "example" and "examples" — they are mutually exclusive');
+        err(path, what + ' should not have both "example" and "examples" — they are mutually exclusive', 'example-conflict');
       }
     }
 
@@ -240,7 +246,7 @@
       Object.keys(content).forEach(function (mime) {
         var mt = content[mime];
         var mtPath = path.concat(mime);
-        if (!expectObj(mt, mtPath, 'the "' + mime + '" media type')) return;
+        if (!expectObj(mt, mtPath, 'the "' + mime + '" media type', 'empty-media-type')) return;
         checkKeys(mt, mtPath, KEYS.mediaType, 'a Media Type Object');
         checkExampleExclusivity(mt, mtPath, 'a media type');
         checkSchema(mt.schema, mtPath.concat('schema'));
@@ -258,7 +264,7 @@
       if (typeof param.in !== 'string' || ins.indexOf(param.in) === -1) {
         err(path, 'a parameter requires "in" set to one of: ' + ins.join(', '));
       } else if (param.in === 'path' && param.required !== true) {
-        err(path, 'path parameters must set "required: true"');
+        err(path, 'path parameters must set "required: true"', 'path-param-required');
       }
       if (!v.is2) {
         checkExampleExclusivity(param, path, 'a parameter');
@@ -288,7 +294,7 @@
       if (!expectObj(res, path, 'a response')) return;
       if (typeof res.$ref === 'string') return;
       checkKeys(res, path, v.is2 ? KEYS.response2 : KEYS.response3, 'a Response Object');
-      if (!has(res, 'description')) err(path, 'a response requires a "description"');
+      if (!has(res, 'description')) err(path, 'a response requires a "description"', 'missing-description');
       else if (typeof res.description !== 'string') err(path.concat('description'), 'should be a string');
       if (isObj(res.headers)) {
         Object.keys(res.headers).forEach(function (h) {
@@ -370,7 +376,7 @@
       }
 
       if (has(op, 'responses')) checkResponses(op.responses, path.concat('responses'));
-      else if (!v.is31) err(path, 'an operation requires "responses"');
+      else if (!v.is31) err(path, 'an operation requires "responses"', 'missing-responses');
 
       checkSecurity(op.security, path.concat('security'));
 
@@ -426,7 +432,7 @@
       Object.keys(doc.paths).forEach(function (p) {
         if (isExt(p)) return;
         if (p.charAt(0) !== '/') {
-          err(['paths', p], 'path "' + p + '" should start with a slash');
+          err(['paths', p], 'path "' + p + '" should start with a slash', 'path-no-slash');
         }
         checkPathItem(doc.paths[p], ['paths', p], p);
       });
