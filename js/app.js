@@ -438,6 +438,7 @@
             return;
           }
         } catch (convErr) {
+          clearIssues(); // also hides a stale Swagger-2.0 banner
           setEditorStatus('err', 'Postman conversion failed: ' + convErr.message);
           return;
         }
@@ -461,7 +462,9 @@
       catch (lintErr) { /* a linter bug must not block rendering */ }
     }
     showIssues(issues, text);
-    document.getElementById('editor-convert20').hidden = parsed.swagger !== '2.0';
+    // Accept the unquoted "swagger: 2.0" too — YAML parses it as the number 2.
+    document.getElementById('editor-convert20').hidden =
+      parsed.swagger === undefined || !/^2(\.|$)/.test(String(parsed.swagger));
     var errorCount = 0;
     var warningCount = 0;
     issues.forEach(function (issue) {
@@ -560,12 +563,21 @@
 
     document.getElementById('editor-convert20-go').addEventListener('click', function () {
       try {
-        var converted = SduiConvert20.toYaml(jsyaml.load(editor.getValue()));
+        // Re-check at click time: the banner can lag behind fast edits, so
+        // never trust it — verify the CURRENT text really is Swagger 2.0.
+        var current = jsyaml.load(editor.getValue());
+        if (!current || typeof current !== 'object' ||
+            current.swagger === undefined || !/^2(\.|$)/.test(String(current.swagger))) {
+          document.getElementById('editor-convert20').hidden = true;
+          setEditorStatus('err', 'The document is not (or no longer) Swagger 2.0 — nothing to convert');
+          return;
+        }
+        var converted = SduiConvert20.toYaml(current);
         editor.setValue(converted); // single undo step brings 2.0 back
         renderNow();
         setEditorStatus('ok', 'Converted to OpenAPI 3.0 — review the result (Ctrl/Cmd+Z restores the original)');
       } catch (convErr) {
-        setEditorStatus('err', 'Conversion failed: ' + convErr.message);
+        setEditorStatus('err', 'Conversion failed: ' + (convErr.reason || convErr.message));
       }
     });
 
