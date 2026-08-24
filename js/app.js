@@ -449,6 +449,11 @@
         return;
       }
       clearIssues();
+      if (parsed.swaggerVersion) {
+        setEditorStatus('err', 'This is a Swagger 1.x document (swaggerVersion: ' + parsed.swaggerVersion +
+          ') — 1.x is not supported; export it as Swagger 2.0 or OpenAPI 3 from your API tool');
+        return;
+      }
       setEditorStatus('err', 'Missing "openapi" (or "swagger") version field');
       return;
     }

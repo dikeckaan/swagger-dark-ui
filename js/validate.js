@@ -88,13 +88,114 @@
       issues.push({ path: path, message: message, severity: 'warning', code: code, data: data });
     }
 
-    function checkKeys(obj, path, allowed, what) {
+    /* Optional `explain(key)` upgrades the generic "additional property"
+       message with version-aware guidance ("needs 3.1", "is a 2.0 keyword"). */
+    function checkKeys(obj, path, allowed, what, explain) {
       Object.keys(obj).forEach(function (k) {
-        if (!isExt(k) && allowed.indexOf(k) === -1) {
+        if (isExt(k) || allowed.indexOf(k) !== -1) return;
+        var hint = explain && explain(k);
+        if (hint) {
+          err(path.concat(k), hint.message, hint.code || 'additional-prop', hint.data || { key: k });
+        } else {
           err(path.concat(k), 'should NOT have additional property "' + k + '" (not allowed in ' + what + ')',
             'additional-prop', { key: k });
         }
       });
+    }
+
+    /* ----- cross-version guidance -----
+       When a keyword is legal in ANOTHER spec version, say so (and offer a
+       one-click version bump where that alone makes it legal). */
+
+    var declares = v.is2 ? 'Swagger 2.0' : 'OpenAPI ' + (ver || '?');
+
+    function needs(k, needed, bumpTo) {
+      return {
+        message: '"' + k + '" needs OpenAPI ' + needed + ' — this document declares ' + declares,
+        code: bumpTo && !v.is2 ? 'bump-version' : 'additional-prop',
+        data: bumpTo && !v.is2 ? { to: bumpTo } : { key: k }
+      };
+    }
+    function fromV2(k, instead) {
+      return { message: '"' + k + '" is a Swagger 2.0 keyword — in OpenAPI 3, ' + instead, data: { key: k } };
+    }
+    function fromV3(k, instead) {
+      return {
+        message: '"' + k + '" is an OpenAPI 3 keyword — ' +
+          (instead || 'use the "Convert to OpenAPI 3" button below the editor to upgrade this document'),
+        data: { key: k }
+      };
+    }
+
+    var HINTS_ROOT_2_IN_3 = {
+      swagger: 'delete it — "openapi" already declares the version',
+      host: 'use "servers"', basePath: 'use "servers"', schemes: 'use "servers"',
+      consumes: 'declare media types under each requestBody\'s "content"',
+      produces: 'declare media types under each response\'s "content"',
+      definitions: 'use "components.schemas"',
+      securityDefinitions: 'use "components.securitySchemes"',
+      parameters: 'use "components.parameters"',
+      responses: 'use "components.responses"'
+    };
+    var PARAM_2_IN_3 = ['type', 'format', 'items', 'collectionFormat', 'default', 'maximum',
+      'exclusiveMaximum', 'minimum', 'exclusiveMinimum', 'maxLength', 'minLength', 'pattern',
+      'maxItems', 'minItems', 'uniqueItems', 'enum', 'multipleOf'];
+
+    function explainRoot(k) {
+      if (v.is2) {
+        if (k === 'components' || k === 'servers' || k === 'webhooks') return fromV3(k);
+        return null;
+      }
+      if (!v.is31 && (k === 'webhooks' || k === 'jsonSchemaDialect')) return needs(k, '3.1+', '3.1.0');
+      if (!v.is32 && k === '$self') return needs(k, '3.2+', '3.2.0');
+      if (HINTS_ROOT_2_IN_3[k]) return fromV2(k, HINTS_ROOT_2_IN_3[k]);
+      return null;
+    }
+    function explainInfo(k) {
+      if (!v.is2 && !v.is31 && k === 'summary') return needs(k, '3.1+', '3.1.0');
+      return null;
+    }
+    function explainLicense(k) {
+      if (!v.is2 && !v.is31 && k === 'identifier') return needs(k, '3.1+', '3.1.0');
+      return null;
+    }
+    function explainComponents(k) {
+      if (!v.is31 && k === 'pathItems') return needs(k, '3.1+', '3.1.0');
+      return null;
+    }
+    function explainPathItem(k) {
+      if (!v.is2 && !v.is32 && (k === 'query' || k === 'additionalOperations')) return needs(k, '3.2+', '3.2.0');
+      return null;
+    }
+    function explainOperation(k) {
+      if (v.is2) {
+        if (k === 'requestBody') return fromV3(k, 'in Swagger 2.0 use an "in: body" or "in: formData" parameter — or convert the document to OpenAPI 3');
+        if (k === 'callbacks' || k === 'servers') return fromV3(k);
+      } else if (k === 'consumes' || k === 'produces' || k === 'schemes') {
+        return fromV2(k, 'media types are declared per requestBody/response under "content"');
+      }
+      return null;
+    }
+    function explainResponse(k) {
+      if (v.is2) {
+        if (k === 'content' || k === 'links') return fromV3(k);
+      } else {
+        if (k === 'schema') return fromV2(k, 'put the schema under "content.<media-type>.schema"');
+        if (k === 'examples') return fromV2(k, 'put examples under "content.<media-type>.examples"');
+      }
+      return null;
+    }
+    function explainParameter(k) {
+      if (v.is2) {
+        if (['content', 'example', 'examples', 'style', 'explode', 'allowReserved', 'deprecated'].indexOf(k) !== -1) {
+          return fromV3(k);
+        }
+        return null;
+      }
+      if (PARAM_2_IN_3.indexOf(k) !== -1) {
+        return fromV2(k, 'move it into the parameter\'s "schema"');
+      }
+      return null;
     }
 
     /* An object was expected. Returns true when it is safe to recurse. */
@@ -126,7 +227,7 @@
 
     var rootAllowed = v.is2 ? KEYS.root2
       : KEYS.root3.concat(v.is31 ? KEYS.root31 : []).concat(v.is32 ? ['$self'] : []);
-    checkKeys(doc, [], rootAllowed, 'an OpenAPI document');
+    checkKeys(doc, [], rootAllowed, 'an OpenAPI document', explainRoot);
 
     if (Array.isArray(doc.servers)) {
       var seenUrls = {};
@@ -144,7 +245,7 @@
     if (!has(doc, 'info')) {
       err([], '"info" is required', 'missing-info');
     } else if (expectObj(doc.info, ['info'], '"info"')) {
-      checkKeys(doc.info, ['info'], KEYS.info.concat(v.is31 ? KEYS.info31 : []), 'the Info Object');
+      checkKeys(doc.info, ['info'], KEYS.info.concat(v.is31 ? KEYS.info31 : []), 'the Info Object', explainInfo);
       if (!has(doc.info, 'title')) err(['info'], '"info.title" is required', 'missing-title');
       else if (typeof doc.info.title !== 'string') err(['info', 'title'], 'should be a string');
       if (!has(doc.info, 'version')) {
@@ -155,7 +256,7 @@
       if (isObj(doc.info.contact)) checkKeys(doc.info.contact, ['info', 'contact'], KEYS.contact, 'the Contact Object');
       if (isObj(doc.info.license)) {
         checkKeys(doc.info.license, ['info', 'license'],
-          KEYS.license.concat(v.is31 ? KEYS.license31 : []), 'the License Object');
+          KEYS.license.concat(v.is31 ? KEYS.license31 : []), 'the License Object', explainLicense);
       }
     }
 
@@ -220,6 +321,35 @@
         warn(path.concat('nullable'), '"nullable" was removed in OpenAPI 3.1+ — use type: [<type>, "null"] instead' +
           (schema.nullable === false ? ' ("nullable: false" is the default and can simply be deleted)' : ''));
       }
+      if (!v.is31) {
+        // JSON Schema keywords that only arrived with 3.1's full alignment.
+        ['const', 'prefixItems', '$defs', 'dependentSchemas', 'patternProperties', 'propertyNames',
+          'contains', 'if', 'then', 'else', 'unevaluatedProperties', 'unevaluatedItems',
+          'contentMediaType', 'contentEncoding'].forEach(function (k) {
+          if (has(schema, k)) {
+            warn(path.concat(k), '"' + k + '" needs OpenAPI 3.1+ — this document declares ' + declares +
+              ', so the keyword is ignored', v.is2 ? undefined : 'bump-version', v.is2 ? undefined : { to: '3.1.0' });
+          }
+        });
+        if (Array.isArray(schema.examples)) {
+          warn(path.concat('examples'), 'a schema-level "examples" array needs OpenAPI 3.1+ — in ' +
+            declares + ' use a single "example"', v.is2 ? undefined : 'bump-version', v.is2 ? undefined : { to: '3.1.0' });
+        }
+      }
+      // exclusiveMinimum/Maximum changed shape between 3.0 (boolean flag on
+      // minimum/maximum) and 3.1 (the exclusive bound itself, a number).
+      ['exclusiveMinimum', 'exclusiveMaximum'].forEach(function (k) {
+        if (!has(schema, k)) return;
+        var pairedWith = k === 'exclusiveMinimum' ? 'minimum' : 'maximum';
+        if (v.is31 && typeof schema[k] === 'boolean') {
+          warn(path.concat(k), 'a boolean "' + k + '" is the 3.0 form — in OpenAPI 3.1+ it is the bound itself ' +
+            '(e.g. ' + k + ': 0), replacing "' + pairedWith + '"');
+        } else if (!v.is31 && typeof schema[k] === 'number') {
+          warn(path.concat(k), 'a numeric "' + k + '" is the OpenAPI 3.1 form — in ' + declares +
+            ' it is a boolean paired with "' + pairedWith + '"',
+            v.is2 ? undefined : 'bump-version', v.is2 ? undefined : { to: '3.1.0' });
+        }
+      });
 
       if (isObj(schema.properties)) {
         Object.keys(schema.properties).forEach(function (p) {
@@ -287,7 +417,7 @@
       if (!expectObj(param, path, 'a parameter')) return null;
       if (typeof param.$ref === 'string') return null;
       var allowed = v.is2 ? KEYS.parameter2 : KEYS.parameter3;
-      checkKeys(param, path, allowed, 'a Parameter Object');
+      checkKeys(param, path, allowed, 'a Parameter Object', explainParameter);
       if (typeof param.name !== 'string') err(path, 'a parameter requires a "name" string');
       var ins = v.is2 ? PARAM_IN_2 : PARAM_IN_3;
       if (typeof param.in !== 'string' || ins.indexOf(param.in) === -1) {
@@ -326,7 +456,7 @@
     function checkResponse(res, path) {
       if (!expectObj(res, path, 'a response')) return;
       if (typeof res.$ref === 'string') return;
-      checkKeys(res, path, v.is2 ? KEYS.response2 : KEYS.response3, 'a Response Object');
+      checkKeys(res, path, v.is2 ? KEYS.response2 : KEYS.response3, 'a Response Object', explainResponse);
       if (!has(res, 'description')) err(path, 'a response requires a "description"', 'missing-description');
       else if (typeof res.description !== 'string') err(path.concat('description'), 'should be a string');
       if (isObj(res.headers)) {
@@ -363,7 +493,7 @@
 
     function checkOperation(op, path, pathTemplate, inheritedParams) {
       if (!expectObj(op, path, 'an operation')) return;
-      checkKeys(op, path, v.is2 ? KEYS.operation2 : KEYS.operation3, 'an Operation Object');
+      checkKeys(op, path, v.is2 ? KEYS.operation2 : KEYS.operation3, 'an Operation Object', explainOperation);
 
       var declared = inheritedParams.slice();
       var hasRefParam = false;
@@ -441,7 +571,7 @@
       if (!expectObj(item, path, 'a path item')) return;
       var allowedItem = v.is2 ? KEYS.pathItem2
         : KEYS.pathItem.concat(v.is32 ? ['query', 'additionalOperations'] : []);
-      checkKeys(item, path, allowedItem, 'a Path Item Object');
+      checkKeys(item, path, allowedItem, 'a Path Item Object', explainPathItem);
 
       var shared = [];
       shared.ref = false;
@@ -487,7 +617,7 @@
 
     if (!v.is2 && has(doc, 'components') && expectObj(doc.components, ['components'], '"components"')) {
       var c = doc.components;
-      checkKeys(c, ['components'], KEYS.components.concat(v.is31 ? KEYS.components31 : []), 'the Components Object');
+      checkKeys(c, ['components'], KEYS.components.concat(v.is31 ? KEYS.components31 : []), 'the Components Object', explainComponents);
       function eachIn(section, fn) {
         if (!isObj(c[section])) return;
         Object.keys(c[section]).forEach(function (name) {
