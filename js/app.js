@@ -502,6 +502,13 @@
           ') — 1.x is not supported; export it as Swagger 2.0 or OpenAPI 3 from your API tool');
         return;
       }
+      // Offer the one-click default rather than just complaining.
+      showIssues([{
+        severity: 'error',
+        path: [],
+        message: 'Missing "openapi" (or "swagger") version field',
+        code: 'add-openapi'
+      }], text, 0);
       setEditorStatus('err', 'Missing "openapi" (or "swagger") version field');
       return;
     }

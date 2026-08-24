@@ -108,8 +108,34 @@
           }
         };
       }
+      case 'oauth2': {
+        // Postman {{variable}} URLs are placeholders, not real endpoints —
+        // swap them for example URLs the user can fill in.
+        var urlOr = function (value, fallback) {
+          value = value === undefined || value === null ? '' : String(value);
+          return value && value.indexOf('{{') === -1 ? value : fallback;
+        };
+        var grant = String(authValue(auth, 'oauth2', 'grant_type') || 'authorization_code');
+        var flowKey = grant.indexOf('client_credentials') !== -1 ? 'clientCredentials'
+          : grant.indexOf('password') !== -1 ? 'password'
+            : grant === 'implicit' ? 'implicit' : 'authorizationCode';
+        var scopes = {};
+        String(authValue(auth, 'oauth2', 'scope') || '').split(/\s+/).forEach(function (s) {
+          if (s) scopes[s] = '';
+        });
+        var flow = { scopes: scopes };
+        if (flowKey !== 'implicit') {
+          flow.tokenUrl = urlOr(authValue(auth, 'oauth2', 'accessTokenUrl'), 'https://auth.example.com/oauth/token');
+        }
+        if (flowKey === 'authorizationCode' || flowKey === 'implicit') {
+          flow.authorizationUrl = urlOr(authValue(auth, 'oauth2', 'authUrl'), 'https://auth.example.com/oauth/authorize');
+        }
+        var flows = {};
+        flows[flowKey] = flow;
+        return { name: 'OAuth2', scheme: { type: 'oauth2', flows: flows } };
+      }
       default:
-        return null; // oauth1/oauth2/digest etc. — not mapped
+        return null; // oauth1/digest/ntlm etc. — not mapped
     }
   }
 
@@ -246,8 +272,19 @@
           schema: { type: 'string', example: q.value || undefined }
         });
       });
+      var sawAuthorizationHeader = false;
       (request.header || []).forEach(function (h) {
-        if (!h || !h.key || h.disabled || /^content-type$/i.test(h.key)) return;
+        if (!h || !h.key || h.disabled) return;
+        // OpenAPI ignores header parameters named Content-Type, Accept and
+        // Authorization — the first two are implied by requestBody/response
+        // "content", the last belongs in securitySchemes. Emitting them
+        // would only trip the linter, so they are dropped here (a raw
+        // Authorization header still becomes a bearer security scheme).
+        if (/^(content-type|accept)$/i.test(h.key)) return;
+        if (/^authorization$/i.test(h.key)) {
+          sawAuthorizationHeader = true;
+          return;
+        }
         params.push({
           name: h.key, in: 'header',
           description: descriptionText(h.description),
@@ -260,6 +297,9 @@
       if (requestBody) op.requestBody = requestBody;
 
       var auth = authToScheme(request.auth) || collectionAuth;
+      if (!auth && sawAuthorizationHeader) {
+        auth = { name: 'BearerAuth', scheme: { type: 'http', scheme: 'bearer' } };
+      }
       if (auth) {
         oas.components.securitySchemes[auth.name] = auth.scheme;
         var sec = {};
