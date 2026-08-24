@@ -511,7 +511,7 @@ body, .sdui-header, .swagger-ui,
 
 body.editor-active #workspace {
   display: grid;
-  grid-template-columns: minmax(360px, 44%) 1fr;
+  grid-template-columns: var(--split-w, minmax(360px, 44%)) 1fr;
   height: calc(100vh - var(--header-h, 55px));
   height: calc(100dvh - var(--header-h, 55px));
 }
@@ -528,6 +528,7 @@ body.editor-active #swagger-ui {
 }
 
 #editor-pane {
+  position: relative; /* anchors the split-resize handle */
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -803,6 +804,66 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
   color: var(--text-faint);
 }
 .sdui-rule-menu .sdui-rule-chips { display: flex; padding: 0 8px 8px; }
+
+/* drag-to-resize: editor/preview split and the issues panel height */
+#split-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 25;
+  touch-action: none;
+}
+#split-handle:hover, #split-handle.dragging {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+body:not([data-layout="split"]) #split-handle { display: none; }
+@media (max-width: 900px) { #split-handle { display: none; } }
+
+.sdui-row-handle {
+  flex: none;
+  height: 6px;
+  margin-top: -1px; /* sit on the panel's top border */
+  cursor: row-resize;
+  touch-action: none;
+}
+.sdui-row-handle:hover, .sdui-row-handle.dragging {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+#editor-issues.resized { max-height: none; height: var(--issues-h); overflow-y: auto; }
+
+/* dismissible warnings + the restore row */
+.sdui-issue-dismiss {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.sdui-issue-dismiss:hover { color: var(--status-err); }
+.sdui-issue-restore {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  list-style: none;
+}
+.sdui-issue-restore button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
 
 /* Autocomplete popup (CodeMirror show-hint addon) */
 .CodeMirror-hints {
