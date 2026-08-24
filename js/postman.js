@@ -337,10 +337,13 @@
       var requestBody = bodyToRequestBody(request.body);
       if (requestBody) op.requestBody = requestBody;
 
-      var auth = authToScheme(request.auth) || collectionAuth;
+      // Precedence mirrors Postman: the request's own auth wins, an explicit
+      // raw Authorization header beats inherited collection auth.
+      var auth = authToScheme(request.auth);
       if (!auth && sawAuthorizationHeader) {
         auth = { name: 'BearerAuth', scheme: { type: 'http', scheme: 'bearer' } };
       }
+      if (!auth) auth = collectionAuth;
       if (auth) {
         oas.components.securitySchemes[auth.name] = auth.scheme;
         var sec = {};
