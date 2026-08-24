@@ -669,6 +669,10 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
 #editor-status.warn { color: var(--status-warn); }
 
 /* Swagger 2.0 conversion offer, above the issues panel */
+/* The hidden attribute relies on the UA's display:none — any rule that sets
+   display on the same element would override it, so make it absolute. */
+[hidden] { display: none !important; }
+
 #editor-convert20 {
   display: flex;
   align-items: center;
@@ -741,6 +745,36 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
 }
 #editor-host .cm-issue-error { background: color-mix(in srgb, var(--status-err) 14%, transparent); }
 #editor-host .cm-issue-warn { background: color-mix(in srgb, var(--status-warn) 12%, transparent); }
+
+/* floating "+ rule" pill on the field under the cursor, and its chip menu */
+.sdui-rule-pill {
+  margin-left: 14px;
+  transform: translateY(-100%);
+  padding: 0 8px;
+  font: 600 10.5px/1.7 inherit;
+  font-family: inherit;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+  z-index: 8;
+}
+.sdui-rule-pill:hover { opacity: 1; background: var(--surface-2); }
+.sdui-rule-menu {
+  position: absolute; /* addWidget positions it inside the editor */
+  margin-left: 14px;
+  max-width: 380px;
+  z-index: 9;
+}
+.sdui-rule-title {
+  padding: 4px 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.sdui-rule-menu .sdui-rule-chips { display: flex; padding: 0 8px 8px; }
 
 /* Autocomplete popup (CodeMirror show-hint addon) */
 .CodeMirror-hints {
