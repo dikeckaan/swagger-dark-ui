@@ -71,6 +71,22 @@
   }
 
   var FIXES = {
+    'bump-version': function (issue, text) {
+      var to = issue.data && issue.data.to;
+      if (!to || !/^3\.\d+\.\d+$/.test(to)) return null;
+      var lines = text.split('\n');
+      var line = U().findTopKey(lines, 'openapi');
+      if (line === -1) return null;
+      return {
+        label: 'Switch to OpenAPI ' + to,
+        apply: function () {
+          var ops = lineOps(text);
+          ops.lines[line] = ops.lines[line].replace(/:\s*.*$/, ': ' + to);
+          return ops.done();
+        }
+      };
+    },
+
     'quote-value': function (issue, text) {
       var line = locate(text, issue.path);
       if (line === -1) return null;
