@@ -102,6 +102,10 @@
           <button id="doc-delete" class="sdui-tool-btn" type="button" title="Delete this spec">Delete</button>
         </div>
         <div class="sdui-editor-actions">
+          <div class="sdui-insert">
+            <button id="editor-insert" class="sdui-tool-btn" type="button" title="Insert OpenAPI building blocks — endpoints, operations, parameters, schemas…">＋ Insert</button>
+            <div id="editor-insert-menu" class="sdui-menu" hidden></div>
+          </div>
           <button id="editor-share" class="sdui-tool-btn" type="button" title="Copy a shareable link that embeds this spec">Share</button>
           <button id="editor-convert" class="sdui-tool-btn" type="button" title="Convert between YAML and JSON">To JSON</button>
           <button id="editor-load-url" class="sdui-tool-btn" type="button" title="Fetch a spec from a URL into the editor">Load URL</button>
@@ -134,6 +138,7 @@
   <script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"
           integrity="sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7" crossorigin="anonymous"></script>
   <script src="js/validate.js"></script>
+  <script src="js/snippets.js"></script>
   <script src="js/mock.js"></script>
   <script src="js/postman.js"></script>
   <script src="js/app.js"></script>

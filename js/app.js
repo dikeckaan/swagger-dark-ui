@@ -512,6 +512,16 @@
     refreshDocSelect();
     updateConvertLabel();
 
+    if (window.SduiSnippets) {
+      SduiSnippets.init({
+        button: document.getElementById('editor-insert'),
+        menu: document.getElementById('editor-insert-menu'),
+        getEditor: function () { return editor; },
+        setStatus: setEditorStatus,
+        onInserted: function (line) { flashEditorLine(line); }
+      });
+    }
+
     var urlRow = document.getElementById('editor-url-row');
     var urlInput = document.getElementById('editor-url-input');
     document.getElementById('editor-load-url').addEventListener('click', function () {

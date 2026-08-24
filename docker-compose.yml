@@ -1,0 +1,7 @@
+# docker compose up  →  http://localhost:8080
+services:
+  swagger-dark-ui:
+    build: .
+    ports:
+      - "8080:80"
+    restart: unless-stopped
