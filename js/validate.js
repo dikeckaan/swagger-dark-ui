@@ -68,11 +68,16 @@
     if (!isObj(doc)) return issues;
 
     var verRaw = has(doc, 'openapi') ? doc.openapi : doc.swagger;
-    var ver = typeof verRaw === 'string' ? verRaw : '';
+    // Unquoted versions ("swagger: 2.0", "openapi: 3.0") arrive as numbers —
+    // still use them to pick the rule set (the wrong type is flagged below),
+    // so the document isn't flooded with rules from the wrong spec version.
+    var ver = typeof verRaw === 'string' ? verRaw
+      : (typeof verRaw === 'number' ? String(verRaw) : '');
     var v = { is31: /^3\.1(\.|$)/.test(ver), is30: /^3\.0(\.|$)/.test(ver), is2: /^2(\.|$)/.test(ver) };
     v.is3 = v.is30 || v.is31;
-    // Unknown 3.x minor versions get the 3.1 rule set (the most permissive).
-    if (!v.is3 && !v.is2 && /^3\./.test(ver)) { v.is31 = true; v.is3 = true; }
+    // Unknown 3.x minor versions (and the bare number 3) get the 3.1 rule
+    // set — the most permissive one.
+    if (!v.is3 && !v.is2 && /^3(\.|$)/.test(ver)) { v.is31 = true; v.is3 = true; }
 
     /* `code` and `data` are machine-readable handles for quick fixes. */
     function err(path, message, code, data) {
@@ -108,7 +113,9 @@
         err(['openapi'], '"' + doc.openapi + '" is not a valid OpenAPI 3 version');
       }
     } else if (has(doc, 'swagger') && doc.swagger !== '2.0') {
-      err(['swagger'], 'should be the string "2.0"');
+      err(['swagger'], 'should be the string "2.0"' +
+        (typeof doc.swagger === 'number' ? ' (quote it — unquoted 2.0 is parsed as a number)' : ''),
+        typeof doc.swagger === 'number' ? 'quote-value' : undefined);
     }
 
     /* ----- root ----- */

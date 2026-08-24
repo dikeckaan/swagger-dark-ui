@@ -183,8 +183,9 @@
   }
 
   function convert(doc) {
-    if (!isObj(doc) || doc.swagger !== '2.0') {
-      throw new Error('not a Swagger 2.0 document');
+    // Accept "swagger: 2.0" unquoted too (YAML parses it as the number 2).
+    if (!isObj(doc) || doc.swagger === undefined || !/^2(\.|$)/.test(String(doc.swagger))) {
+      throw new Error('not a Swagger 2.0 document (no "swagger: \'2.0\'" field)');
     }
     var out = { openapi: '3.0.3', info: clone(doc.info) || { title: 'API', version: '1.0.0' } };
 
