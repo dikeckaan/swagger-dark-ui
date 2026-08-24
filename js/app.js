@@ -541,6 +541,26 @@
       SduiComplete.init(editor);
     }
 
+    if (window.SduiConstraints) {
+      SduiConstraints.init({ editor: editor, setStatus: setEditorStatus });
+    }
+
+    document.getElementById('editor-undo').addEventListener('click', function () {
+      editor.undo();
+      editor.focus();
+    });
+    document.getElementById('editor-redo').addEventListener('click', function () {
+      editor.redo();
+      editor.focus();
+    });
+    document.getElementById('editor-copy').addEventListener('click', function () {
+      copyText(editor.getValue()).then(function () {
+        setEditorStatus('ok', 'Spec copied to the clipboard');
+      }).catch(function () {
+        setEditorStatus('err', 'Could not copy to the clipboard');
+      });
+    });
+
     if (window.SduiExport) {
       SduiExport.init({
         button: document.getElementById('editor-export'),

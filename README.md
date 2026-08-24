@@ -11,6 +11,7 @@ Swagger UI can render — deployed as a fully static site on GitHub Pages.
 - 🔀 **Spec switcher** — flip between the full-feature demo API and the live Swagger Petstore (shareable via `?spec=` URL parameter)
 - ✏️ **Bring your own APIs** — a built-in split-pane YAML editor with live preview: multiple named specs, open local files, fetch from a URL (CORS required), download, JSON↔YAML conversion, `Cmd/Ctrl+S` to save and `Cmd/Ctrl+Enter` to render
 - ➕ **Insert menu** — build a spec without memorizing OpenAPI structure (`js/snippets.js`): one click inserts a full CRUD resource, a new endpoint (GET/POST/PUT/PATCH/DELETE), an operation on the path under the cursor, parameters, request bodies, responses, schemas, security schemes, servers or tags — indentation-aware, placed in the right section, with the placeholder name pre-selected for renaming
+- 🎛️ **Inline rule menu** — put the cursor on a schema property, component schema, or parameter and a "＋ rule" pill appears (`js/constraints.js`): it offers the validation keywords that fit the value's type (`minLength`, `pattern`, `minimum`, `enum`, `required`, …) and inserts them in the right place — `required` lands in the parent schema's list, parameter rules go into its `schema:` (created on demand)
 - 🩺 **OpenAPI validation with quick fixes** — the editor lints your document like Swagger Editor does (`js/validate.js`): misplaced/unknown properties, wrong value types (`version: 1.0` vs `"1.0"`), security requirements without a matching scheme, unresolved `$ref`s, invalid status codes, `example`/`examples` conflicts and more — each issue is clickable and jumps to the offending line, while the preview keeps rendering. Most issues carry a one-click **Fix** button (`js/quickfix.js`): quote the value, create the missing security scheme, remove the offending property, add the missing `description`/`responses`, …
 - ⌨️ **Context-aware autocomplete** (`js/autocomplete.js`) — type (or press `Ctrl+Space`) and get the OpenAPI keys valid *right there*: operation keys inside `get:`, parameter keys inside a `- name:` item, schema keywords under `schema:`, media types under `content:`, quoted status codes under `responses:`, plus value completions for `in:`/`type:`/`format:`/`style:` and live `$ref:` targets and security-scheme names read from your own document
 - 🧪 **Example generator** — one Insert-menu click derives an `example:` block from the schema under the cursor ($refs resolved), reusing the mock server's schema→example engine
@@ -72,6 +73,7 @@ optional live Petstore spec view requires connectivity.
 ├─ js/app.js                     # Swagger UI init, spec switcher, theme persistence
 ├─ js/validate.js                # OpenAPI linter for the YAML editor (issues panel)
 ├─ js/quickfix.js                # One-click fixes for linter issues
+├─ js/constraints.js             # Inline "+ rule" menu for the field under the cursor
 ├─ js/snippets.js                # "+ Insert" menu: OpenAPI building-block templates
 ├─ js/autocomplete.js            # Context-aware OpenAPI autocomplete ($ref picker incl.)
 ├─ js/convert20.js               # Swagger 2.0 → OpenAPI 3.0 converter
