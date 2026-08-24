@@ -666,6 +666,52 @@ body.editor-active[data-layout="preview"] #swagger-ui > .swagger-ui {
 #editor-status.ok { color: var(--status-ok); }
 #editor-status.err { color: var(--status-err); }
 #editor-status.busy { color: var(--status-warn); }
+#editor-status.warn { color: var(--status-warn); }
+
+/* OpenAPI validation issues, listed between the editor and the status bar */
+#editor-issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex: none;
+  max-height: 30%;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+.sdui-issue {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sdui-issue:last-child { border-bottom: none; }
+.sdui-issue:hover { background: var(--surface-2); }
+.sdui-issue-badge {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.sdui-issue.error .sdui-issue-badge { color: var(--status-err); }
+.sdui-issue.warning .sdui-issue-badge { color: var(--status-warn); }
+.sdui-issue-msg { color: var(--text); min-width: 0; }
+.sdui-issue-where {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-faint);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+#editor-host .cm-issue-error { background: color-mix(in srgb, var(--status-err) 14%, transparent); }
+#editor-host .cm-issue-warn { background: color-mix(in srgb, var(--status-warn) 12%, transparent); }
 
 @media (max-width: 900px) {
   body.editor-active #workspace {
