@@ -73,10 +73,11 @@
     // so the document isn't flooded with rules from the wrong spec version.
     var ver = typeof verRaw === 'string' ? verRaw
       : (typeof verRaw === 'number' ? String(verRaw) : '');
-    var v = { is31: /^3\.1(\.|$)/.test(ver), is30: /^3\.0(\.|$)/.test(ver), is2: /^2(\.|$)/.test(ver) };
+    var minor3 = (ver.match(/^3\.(\d+)/) || [])[1];
+    minor3 = minor3 === undefined ? -1 : parseInt(minor3, 10);
+    var v = { is30: minor3 === 0, is31: minor3 >= 1, is32: minor3 >= 2, is2: /^2(\.|$)/.test(ver) };
     v.is3 = v.is30 || v.is31;
-    // Unknown 3.x minor versions (and the bare number 3) get the 3.1 rule
-    // set — the most permissive one.
+    // The bare number 3 (unquoted "openapi: 3.0") gets the permissive rules.
     if (!v.is3 && !v.is2 && /^3(\.|$)/.test(ver)) { v.is31 = true; v.is3 = true; }
 
     /* `code` and `data` are machine-readable handles for quick fixes. */
@@ -111,6 +112,9 @@
         err(['openapi'], 'should be a string (quote it, e.g. "3.0.0" — unquoted 3.0 is parsed as a number)', 'quote-value');
       } else if (!/^3\.\d+(\.\d+)?/.test(doc.openapi)) {
         err(['openapi'], '"' + doc.openapi + '" is not a valid OpenAPI 3 version');
+      } else if (minor3 > 2) {
+        warn(['openapi'], 'OpenAPI ' + doc.openapi + ' is newer than this linter fully knows — ' +
+          'validating with the 3.1/3.2 rule set; some tools may not support it yet');
       }
     } else if (has(doc, 'swagger') && doc.swagger !== '2.0') {
       err(['swagger'], 'should be the string "2.0"' +
@@ -120,8 +124,22 @@
 
     /* ----- root ----- */
 
-    var rootAllowed = v.is2 ? KEYS.root2 : KEYS.root3.concat(v.is31 ? KEYS.root31 : []);
+    var rootAllowed = v.is2 ? KEYS.root2
+      : KEYS.root3.concat(v.is31 ? KEYS.root31 : []).concat(v.is32 ? ['$self'] : []);
     checkKeys(doc, [], rootAllowed, 'an OpenAPI document');
+
+    if (Array.isArray(doc.servers)) {
+      var seenUrls = {};
+      doc.servers.forEach(function (server, i) {
+        if (isObj(server) && typeof server.url === 'string') {
+          if (seenUrls[server.url] !== undefined) {
+            warn(['servers', i], 'duplicate server URL "' + server.url + '" (also entry ' + seenUrls[server.url] + ')');
+          } else {
+            seenUrls[server.url] = i;
+          }
+        }
+      });
+    }
 
     if (!has(doc, 'info')) {
       err([], '"info" is required', 'missing-info');
@@ -198,6 +216,10 @@
           warn(path.concat('type'), '"' + t + '" is not a valid schema type (' + types.join(', ') + ')');
         }
       });
+      if (v.is31 && has(schema, 'nullable')) {
+        warn(path.concat('nullable'), '"nullable" was removed in OpenAPI 3.1+ — use type: [<type>, "null"] instead' +
+          (schema.nullable === false ? ' ("nullable: false" is the default and can simply be deleted)' : ''));
+      }
 
       if (isObj(schema.properties)) {
         Object.keys(schema.properties).forEach(function (p) {
@@ -272,6 +294,10 @@
         err(path, 'a parameter requires "in" set to one of: ' + ins.join(', '));
       } else if (param.in === 'path' && param.required !== true) {
         err(path, 'path parameters must set "required: true"', 'path-param-required');
+      } else if (!v.is2 && param.in === 'header' && typeof param.name === 'string' &&
+          ['content-type', 'accept', 'authorization'].indexOf(param.name.toLowerCase()) !== -1) {
+        warn(path, 'a header parameter named "' + param.name + '" is IGNORED by OpenAPI — ' +
+          'describe bodies with "content" media types and authentication with "components.securitySchemes"');
       }
       if (!v.is2) {
         checkExampleExclusivity(param, path, 'a parameter');
@@ -413,7 +439,9 @@
 
     function checkPathItem(item, path, pathTemplate) {
       if (!expectObj(item, path, 'a path item')) return;
-      checkKeys(item, path, v.is2 ? KEYS.pathItem2 : KEYS.pathItem, 'a Path Item Object');
+      var allowedItem = v.is2 ? KEYS.pathItem2
+        : KEYS.pathItem.concat(v.is32 ? ['query', 'additionalOperations'] : []);
+      checkKeys(item, path, allowedItem, 'a Path Item Object');
 
       var shared = [];
       shared.ref = false;
@@ -428,7 +456,7 @@
           });
         }
       }
-      METHODS.forEach(function (method) {
+      METHODS.concat(v.is32 ? ['query'] : []).forEach(function (method) {
         if (has(item, method)) checkOperation(item[method], path.concat(method), pathTemplate, shared);
       });
     }
