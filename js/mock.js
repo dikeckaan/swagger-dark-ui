@@ -482,6 +482,14 @@
   var lastPathsSignature = null;
   window.SduiMock = {
     ORIGIN: MOCK_ORIGIN,
+    /* Also used by the editor's "example from schema" generator. `spec` is
+       only needed to resolve $refs and does not replace the active spec. */
+    exampleFromSchema: function (schema, spec) {
+      var prev = activeSpec;
+      if (spec) activeSpec = spec;
+      try { return exampleFromSchema(schema, 0, []); }
+      finally { activeSpec = prev; }
+    },
     setSpec: function (spec) {
       activeSpec = spec || null;
       // Reset stored data only when the set of paths actually changes —
