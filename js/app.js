@@ -84,6 +84,7 @@
   var themeToggle = document.getElementById('theme-toggle');
   var editorPane = document.getElementById('editor-pane');
   var editorStatus = document.getElementById('editor-status');
+  var editorIssues = document.getElementById('editor-issues');
   var fileInput = document.getElementById('editor-file-input');
 
   var editor = null;        // CodeMirror instance, created lazily
@@ -338,6 +339,53 @@
     editorStatus.textContent = message;
   }
 
+  /* ----- OpenAPI validation issues (panel under the editor) ----- */
+
+  var issueMarks = []; // CodeMirror line handles carrying issue backgrounds
+
+  function clearIssues() {
+    issueMarks.forEach(function (mark) {
+      editor.removeLineClass(mark.handle, 'background', mark.cls);
+    });
+    issueMarks = [];
+    editorIssues.innerHTML = '';
+    editorIssues.hidden = true;
+  }
+
+  function showIssues(issues, text) {
+    clearIssues();
+    if (!issues.length) return;
+    editorIssues.hidden = false;
+    issues.forEach(function (issue) {
+      var line = window.SduiValidate ? SduiValidate.locate(text, issue.path) : -1;
+      var li = document.createElement('li');
+      li.className = 'sdui-issue ' + issue.severity;
+      li.title = issue.path.join('.') || '(document root)';
+
+      var badge = document.createElement('span');
+      badge.className = 'sdui-issue-badge';
+      badge.textContent = issue.severity === 'error' ? 'error' : 'warn';
+      li.appendChild(badge);
+
+      var msg = document.createElement('span');
+      msg.className = 'sdui-issue-msg';
+      msg.textContent = issue.message;
+      li.appendChild(msg);
+
+      var where = document.createElement('span');
+      where.className = 'sdui-issue-where';
+      where.textContent = line !== -1 ? 'line ' + (line + 1) : (issue.path.join('.') || 'document');
+      li.appendChild(where);
+
+      if (line !== -1) {
+        li.addEventListener('click', function () { flashEditorLine(line); });
+        var cls = issue.severity === 'error' ? 'cm-issue-error' : 'cm-issue-warn';
+        issueMarks.push({ handle: editor.addLineClass(line, 'background', cls), cls: cls });
+      }
+      editorIssues.appendChild(li);
+    });
+  }
+
   function renderEditorContent() {
     var text = editor.getValue();
     var doc = docs[activeDocId()];
@@ -351,10 +399,12 @@
       parsed = jsyaml.load(text);
     } catch (err) {
       var where = err.mark ? ' (line ' + (err.mark.line + 1) + ')' : '';
+      clearIssues();
       setEditorStatus('err', 'YAML error' + where + ': ' + err.reason);
       return; // keep the last good render on the right
     }
     if (!parsed || typeof parsed !== 'object') {
+      clearIssues();
       setEditorStatus('err', 'Document is empty — start with "openapi: 3.0.3"');
       return;
     }
@@ -375,11 +425,38 @@
         }
       }
       if (postmanKind === 'v1') {
+        clearIssues();
         setEditorStatus('err', 'This is a Postman Collection v1 export — in Postman choose Export → Collection v2.1 and try again');
         return;
       }
+      clearIssues();
       setEditorStatus('err', 'Missing "openapi" (or "swagger") version field');
       return;
+    }
+
+    // Lint the document the way Swagger Editor would; issues are listed in a
+    // panel under the editor but never block the preview (Swagger UI renders
+    // what it can, so the user still sees the effect of the mistake).
+    var issues = [];
+    if (window.SduiValidate) {
+      try { issues = SduiValidate.validate(parsed); }
+      catch (lintErr) { /* a linter bug must not block rendering */ }
+    }
+    showIssues(issues, text);
+    var errorCount = 0;
+    var warningCount = 0;
+    issues.forEach(function (issue) {
+      if (issue.severity === 'error') errorCount++; else warningCount++;
+    });
+    if (errorCount) {
+      setEditorStatus('err', errorCount + ' error' + (errorCount === 1 ? '' : 's') +
+        (warningCount ? ', ' + warningCount + ' warning' + (warningCount === 1 ? '' : 's') : '') +
+        ' — still rendering; click an issue to jump to its line');
+    } else if (warningCount) {
+      setEditorStatus('warn', warningCount + ' warning' + (warningCount === 1 ? '' : 's') +
+        ' — rendering live; click an issue to jump to its line');
+    } else {
+      setEditorStatus('ok', 'Valid — rendering live');
     }
 
     if (text === lastRenderedText) return;
@@ -405,7 +482,6 @@
     window.SduiMock.setSpec(withMock);
 
     renderFromObject(withMock);
-    setEditorStatus('ok', 'Valid — rendering live');
   }
 
   function scheduleRender() {

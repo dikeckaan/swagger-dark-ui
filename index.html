@@ -117,6 +117,7 @@
         <button id="editor-url-cancel" class="sdui-tool-btn" type="button">Cancel</button>
       </div>
       <div id="editor-host"></div>
+      <ul id="editor-issues" aria-label="Validation issues" hidden></ul>
       <div id="editor-status" class="ok" role="status">Valid — rendering live</div>
     </aside>
     <main id="swagger-ui" aria-live="polite"></main>
@@ -132,6 +133,7 @@
           integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"
           integrity="sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7" crossorigin="anonymous"></script>
+  <script src="js/validate.js"></script>
   <script src="js/mock.js"></script>
   <script src="js/postman.js"></script>
   <script src="js/app.js"></script>
