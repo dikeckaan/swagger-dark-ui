@@ -52,7 +52,7 @@
       'password', 'uuid', 'email', 'uri', 'hostname', 'ipv4', 'ipv6'],
     style: ['form', 'simple', 'label', 'matrix', 'spaceDelimited', 'pipeDelimited', 'deepObject'],
     scheme: ['basic', 'bearer', 'digest'],
-    openapi: ['3.0.3', '3.1.0'],
+    openapi: ['3.0.3', '3.1.0', '3.2.0'],
     required: ['true', 'false'],
     deprecated: ['true', 'false'],
     explode: ['true', 'false'],
