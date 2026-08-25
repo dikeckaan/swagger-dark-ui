@@ -68,9 +68,8 @@ writeDist('standalone.html',
   readDist('standalone.html').replace('</title>', '</title>\n  <meta name="robots" content="noindex" />'));
 
 /* ── 4. SEO head + crawlable footer on the app page ────────────────────── */
-const DESCRIPTION = 'Free online OpenAPI editor with dark mode: live Swagger UI preview, ' +
-  'version-aware validation with quick fixes, in-browser mock server, Postman import ' +
-  'and Swagger 2.0 conversion.';
+const DESCRIPTION = 'Free OpenAPI editor with live Swagger UI preview, one-click validation ' +
+  'fixes and an in-browser mock server. No signup — nothing leaves your browser.';
 
 const homeJsonLd = {
   '@context': 'https://schema.org',
@@ -130,6 +129,8 @@ const ogTags = (title, desc, url) =>
 const jsonLdTag = data =>
   '  <script type="application/ld+json">' + JSON.stringify(data) + '</script>\n';
 
+const TOUCH_ICON = '  <link rel="apple-touch-icon" href="/app/icons/icon-180.png" />\n';
+
 const FONT_LINKS =
   '  <link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
   '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n' +
@@ -142,7 +143,7 @@ const FOOTER_HTML =
   '        <h2>OASForge</h2>\n' +
   '        <ul>\n' +
   '          <li><a href="/">Home</a></li>\n' +
-  '          <li><a href="/app/?spec=custom">Open the editor</a></li>\n' +
+  '          <li><a href="/editor/">Editor</a></li>\n' +
   '          <li><a href="/guide/">User guide</a></li>\n' +
   '          <li><a href="/faq/">FAQ</a></li>\n' +
   '          <li><a href="/standalone.html">Offline single-file app</a></li>\n' +
@@ -206,7 +207,7 @@ const NAV_LINKS =
   '<a href="/guide/">Guide</a>' +
   '<a href="/faq/">FAQ</a>' +
   '<a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a>' +
-  '<a class="cta" href="/app/?spec=custom">Open the editor</a>' +
+  '<a class="cta" href="/editor/">Open the editor</a>' +
   '</nav>';
 
 const PAGE_FOOTER = FOOTER_HTML
@@ -232,6 +233,7 @@ function layout(p) {
     jsonLdTag(crumbs) +
     (p.jsonLd ? jsonLdTag(p.jsonLd) : '') +
     '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
+    TOUCH_ICON +
     FONT_LINKS +
     '  <link rel="stylesheet" href="/assets/seo.css" />\n' +
     '</head>\n<body>\n' +
@@ -244,7 +246,7 @@ function layout(p) {
     p.body + '\n' +
     '    <div class="cta-block">\n' +
     '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
-    '      <a class="button" href="/app/?spec=custom">Open the OASForge editor</a>\n' +
+    '      <a class="button" href="/editor/">Start in the editor</a>\n' +
     '    </div>\n' +
     '  </main>\n' +
     PAGE_FOOTER +
@@ -335,15 +337,16 @@ const LEARN_LINKS = [
   ['/faq/', 'FAQ', 'Privacy, versions, offline use and licensing, answered.']
 ];
 
-const landingTitle = 'OASForge — Free Online OpenAPI Editor, Validator &amp; Mock Server';
+const landingTitle = 'OASForge — Free OpenAPI Editor, Validator &amp; Mock Server';
 writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<head>\n' +
   '  <meta charset="UTF-8" />\n' +
   '  <meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
   '  <title>' + landingTitle + '</title>\n' +
-  '  <meta name="description" content="' + esc(DESCRIPTION) + ' Free and open source — no signup, nothing leaves your browser." />\n' +
+  '  <meta name="description" content="' + esc(DESCRIPTION) + '" />\n' +
   ogTags(landingTitle, DESCRIPTION, BASE + '/') +
   jsonLdTag(homeJsonLd) +
   '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
+  TOUCH_ICON +
   FONT_LINKS +
   '  <script>\n' +
   '    // Old app links landed at this path (?spec=..., #s=... share links);\n' +
@@ -363,11 +366,12 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '      <p class="eyebrow"><span class="dot g"></span>Free &amp; open source<span class="sep"></span>' +
   '<span class="dot b"></span>No signup<span class="sep"></span><span class="dot o"></span>100% in your browser</p>\n' +
   '      <h1>Forge better <span class="grad">OpenAPI</span> specs.<br>Right here, in the dark.</h1>\n' +
-  '      <p class="lede">OASForge is a complete OpenAPI workbench in a browser tab: write YAML beside a live ' +
-  'Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API against a built-in mock server, ' +
-  'import Postman collections and export documentation. No account, no backend — your spec never leaves the page.</p>\n' +
+  '      <p class="lede">OASForge is the dark OpenAPI workbench where better specs get forged: write YAML ' +
+  'beside a live Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API against a built-in ' +
+  'mock server, import Postman collections and export documentation. No account, no backend — your spec ' +
+  'never leaves the page.</p>\n' +
   '      <div class="hero-ctas">\n' +
-  '        <a class="button" href="/app/?spec=custom">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
+  '        <a class="button" href="/editor/">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
   '        <a class="button ghost" href="/guide/">Read the guide</a>\n' +
   '      </div>\n' +
   '      <p class="hero-note"><code>swagger: "2.0"</code><span class="arrow">→</span>' +
@@ -427,11 +431,21 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '    <div class="cta-block">\n' +
   '      <h2>Ready when you are</h2>\n' +
   '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
-  '      <a class="button" href="/app/?spec=custom">Open the OASForge editor</a>\n' +
+  '      <a class="button" href="/editor/">Start in the editor</a>\n' +
   '    </div>\n' +
   '  </main>\n' +
   PAGE_FOOTER +
   '</body>\n</html>\n'));
+
+writeDist('editor/index.html', '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
+  '  <meta charset="UTF-8" />\n' +
+  '  <meta name="robots" content="noindex" />\n' +
+  '  <meta http-equiv="refresh" content="0; url=../app/?spec=custom" />\n' +
+  '  <link rel="canonical" href="' + BASE + '/app/" />\n' +
+  '  <title>OASForge Editor</title>\n' +
+  '  <script>location.replace(\'../app/?spec=custom\' + location.hash);</script>\n' +
+  '</head>\n<body style="background:#0d1117;color:#8b949e;font-family:system-ui;padding:40px">' +
+  'Opening the editor… <a href="../app/?spec=custom" style="color:#58a6ff">Continue</a></body>\n</html>\n');
 
 // Earlier deploys served the app (and registered its service worker) at the
 // root scope. This replacement worker cleans those clients up: it drops the
@@ -475,7 +489,11 @@ writeDist('404.html', layout({
 }).replace('<head>\n', '<head>\n  <meta name="robots" content="noindex" />\n'));
 
 /* Cache and security headers (Workers static assets honors _headers). */
+const htmlHeaderRules = ['/', '/app/', '/editor/', '/guide/', '/faq/']
+  .concat(PAGES.map(p => '/' + p.slug + '/'))
+  .map(u => u + '\n  Content-Type: text/html; charset=utf-8\n').join('');
 writeDist('_headers',
+  htmlHeaderRules +
   '/app/vendor/*\n  Cache-Control: public, max-age=31536000, immutable\n' +
   '/app/icons/*\n  Cache-Control: public, max-age=86400\n' +
   '/og-image.png\n  Cache-Control: public, max-age=86400\n' +
