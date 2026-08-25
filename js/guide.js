@@ -11,7 +11,7 @@
 
   var SECTIONS = [
     { id: 'overview', title: 'Overview', html:
-      '<p>Swagger Dark UI is a self-contained workbench for OpenAPI documents: a dark-themed ' +
+      '<p>OASForge is a self-contained workbench for OpenAPI documents: a dark-themed ' +
       'Swagger UI preview paired with a YAML editor that validates, autocompletes, searches, ' +
       'imports, exports and mocks — entirely in your browser. Nothing you type ever leaves the page: ' +
       'documents are stored in your browser’s local storage, and the built-in mock server answers ' +
@@ -193,7 +193,7 @@
       'repository for the full text.</p>'
     },
     { id: 'about', title: 'About', html:
-      '<p>Swagger Dark UI is designed, built and maintained by <strong>Kaan Dikeç</strong> — from the ' +
+      '<p>OASForge — formerly <em>Swagger Dark UI</em> — is designed, built and maintained by <strong>Kaan Dikeç</strong> — from the ' +
       'dark theme and the demo specification to the in-browser validator, mock server, converters and ' +
       'exporters. It is an independent open-source project.</p>' +
       '<table><thead><tr><th>Channel</th><th>Address</th></tr></thead><tbody>' +
@@ -224,7 +224,7 @@
     overlay.innerHTML =
       '<div class="sdui-modal sdui-guide" role="dialog" aria-modal="true" aria-label="User guide">' +
       '  <div class="sdui-modal-head">' +
-      '    <div class="g-title">User Guide<span class="g-subtitle">Swagger Dark UI reference</span></div>' +
+      '    <div class="g-title">User Guide<span class="g-subtitle">OASForge reference</span></div>' +
       '    <button id="guide-close" class="sdui-tool-btn" type="button" title="Close (Esc)">Close</button>' +
       '  </div>' +
       '  <div class="g-body">' +

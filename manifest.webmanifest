@@ -1,7 +1,7 @@
 {
-  "name": "Swagger Dark UI",
-  "short_name": "Swagger Dark",
-  "description": "Dark-themed OpenAPI workbench: editor, validation, mock server, import/export — fully offline.",
+  "name": "OASForge",
+  "short_name": "OASForge",
+  "description": "OASForge — the dark OpenAPI workbench: editor, validation, mock server, import/export, fully offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

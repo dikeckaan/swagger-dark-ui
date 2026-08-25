@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="icons/logo.svg" width="112" alt="Swagger Dark UI — braces wrapping method-colored API routes" />
-  <h1>Swagger Dark UI</h1>
+  <img src="icons/logo.svg" width="112" alt="OASForge — braces wrapping method-colored API routes" />
+  <h1>OASForge</h1>
   <p><strong>The dark-themed OpenAPI workbench — editor, validator, mock server,<br>converters and exporters in a single static page.</strong></p>
   <p>
     Crafted and maintained by <a href="https://kaandikec.com"><strong>Kaan Dikeç</strong></a>
@@ -15,14 +15,14 @@
     &nbsp;·&nbsp;
     <a href="#license">License (ELv2)</a>
   </p>
-  <p><sub>The hosted edition is <strong>OASForge</strong> — this repository is its source.</sub></p>
+  <p><sub>Formerly <em>Swagger Dark UI</em> — the repository keeps its original name.</sub></p>
 </div>
 
 ---
 
-A polished, **dark-themed Swagger UI showcase** that demonstrates every feature
-Swagger UI can render — deployed as a fully static site on GitHub Pages, and
-grown into a complete OpenAPI authoring environment.
+**OASForge** (formerly *Swagger Dark UI*) is a dark-themed OpenAPI workbench —
+editor, validator, mock server, converters and exporters in a single static
+site, deployed to both Cloudflare and GitHub Pages from one build.
 
 ## Features
 
@@ -118,25 +118,26 @@ optional live Petstore spec view requires connectivity.
 
 ## Deployment
 
-Two deployments run from the same source, both on every push to `main`:
+Both deployments publish the **same build** (`build-cf.js`: landing page at
+the root, the app at `/app/`, static `/guide/`, `/faq/` and landing pages,
+`sitemap.xml`, `robots.txt`, cache headers and the single-file
+`standalone.html`) on every push to `main`:
 
-- **GitHub Pages** — the [Pages workflow](.github/workflows/deploy.yml) publishes
-  the repository root (plus the freshly built `standalone.html`) to
-  `kaandikec.com/swagger-dark-ui`.
-- **OASForge on Cloudflare** ([oasforge.dev](https://oasforge.dev/)) — the
-  [Cloudflare workflow](.github/workflows/deploy-cf.yml) runs `build-cf.js`,
-  which produces `dist-cf/`: the same app rebranded to OASForge with an
-  SEO-optimized shell — canonical/Open Graph/JSON-LD metadata, static
-  `/guide/`, `/faq/` and landing pages, `sitemap.xml`, `robots.txt` and cache
-  headers — and deploys it with Wrangler as an **assets-only Worker**
-  (static asset requests are free and unmetered on every Workers plan).
-  The workflow is a no-op until the `CLOUDFLARE_API_TOKEN` and
-  `CLOUDFLARE_ACCOUNT_ID` repository secrets are set; the custom-domain
-  routes live in [`wrangler.jsonc`](wrangler.jsonc).
+- **Cloudflare** ([oasforge.dev](https://oasforge.dev/)) — the
+  [Cloudflare workflow](.github/workflows/deploy-cf.yml) builds `dist-cf/` and
+  deploys it with Wrangler as an **assets-only Worker** (static asset requests
+  are free and unmetered on every Workers plan). A no-op until the
+  `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets are
+  set (or connect the repo to Cloudflare Workers Builds instead).
+- **GitHub Pages mirror** (`kaandikec.com/swagger-dark-ui`) — the
+  [Pages workflow](.github/workflows/deploy.yml) runs the same script with
+  `--base /swagger-dark-ui --out dist-pages` so internal links carry the
+  sub-path prefix. Canonical URLs point at oasforge.dev, so search signals
+  consolidate on the primary domain.
 
 ## Author
 
-**Swagger Dark UI** is designed, built and maintained by
+**OASForge** — formerly *Swagger Dark UI* — is designed, built and maintained by
 **[Kaan Dikeç](https://kaandikec.com)** ([@dikeckaan](https://github.com/dikeckaan)) —
 from the dark theme and the demo spec to the in-browser validator, mock server
 and converters. Feedback, ideas and bug reports are always welcome via
