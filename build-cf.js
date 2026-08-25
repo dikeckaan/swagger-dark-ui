@@ -163,17 +163,10 @@ const ogTags = (title, desc, url) =>
 const jsonLdTag = data =>
   '  <script type="application/ld+json">' + JSON.stringify(data) + '</script>\n';
 
-const FOOTER_CSS =
-  '  <style>\n' +
-  '    .sdui-seo-footer { border-top: 1px solid var(--border, #30363d); background: var(--panel, #161b22);\n' +
-  '      color: #8b949e; font-size: 13.5px; padding: 26px 24px; line-height: 1.7; }\n' +
-  '    .sdui-seo-footer .cols { max-width: 1080px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 22px 52px; }\n' +
-  '    .sdui-seo-footer h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; margin: 0 0 8px; color: #c9d1d9; }\n' +
-  '    .sdui-seo-footer ul { list-style: none; margin: 0; padding: 0; }\n' +
-  '    .sdui-seo-footer a { color: #8b949e; text-decoration: none; }\n' +
-  '    .sdui-seo-footer a:hover { color: #c9d1d9; text-decoration: underline; }\n' +
-  '    .sdui-seo-footer .legal { max-width: 1080px; margin: 18px auto 0; border-top: 1px solid var(--border, #30363d); padding-top: 12px; }\n' +
-  '  </style>\n';
+const FONT_LINKS =
+  '  <link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
+  '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n' +
+  '  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />\n';
 
 const FOOTER_HTML =
   '  <footer class="sdui-seo-footer">\n' +
@@ -211,15 +204,15 @@ const FOOTER_HTML =
   'OASForge — formerly Swagger Dark UI — is an independent open-source project.</div>\n' +
   '  </footer>\n';
 
+// No footer on the app page — it leaked under the editor layout; the landing
+// and content pages carry the internal links instead.
 index = readDist('app/index.html');
 index = mustReplace(index, '</title>',
   '</title>\n' +
   ogTags('OASForge Editor — The OpenAPI Workbench in Your Browser',
     'The OASForge workbench: write, validate, preview and mock OpenAPI documents in your browser.',
-    BASE + '/app/') +
-  FOOTER_CSS,
+    BASE + '/app/'),
   'app head injection');
-index = mustReplace(index, /(<\/main>)/, '$1\n' + FOOTER_HTML, 'app footer injection');
 writeDist('app/index.html', index);
 
 /* ── 5. Static content pages ───────────────────────────────────────────── */
@@ -266,10 +259,11 @@ function layout(p) {
     jsonLdTag(crumbs) +
     (p.jsonLd ? jsonLdTag(p.jsonLd) : '') +
     '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
+    FONT_LINKS +
     '  <link rel="stylesheet" href="/assets/seo.css" />\n' +
     '</head>\n<body>\n' +
     '  <header class="site-header">\n' +
-    '    <a class="brand" href="/">' + LOGO_SVG + '<span><span style="color:#58a6ff">OAS</span>Forge</span></a>\n' +
+    '    <a class="brand" href="/">' + LOGO_SVG + '<span><span class="oas">OAS</span>Forge</span></a>\n' +
     '    ' + NAV_LINKS + '\n' +
     '  </header>\n' +
     '  <main class="content">\n' +
@@ -334,16 +328,29 @@ writeDist('guide/index.html', layout({
 }));
 
 /* ── 6. Landing page at the root ───────────────────────────────────────── */
+const icon = paths =>
+  '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+
 const HERO_FEATURES = [
-  ['Live preview', 'YAML on the left, rendered Swagger UI on the right — updated as you type, with the dark theme the ecosystem never shipped.'],
-  ['Version-aware validation', 'Errors and warnings tuned to Swagger 2.0, OpenAPI 3.0, 3.1 and 3.2 — clickable, explained, and most with a one-click Fix.'],
-  ['Stateful mock server', 'Try it out without a backend: POST creates records in the page, GET lists them back, schemas become realistic examples.'],
-  ['Insert menu', 'A CRUD resource, endpoint, parameter, response, schema or security scheme — inserted correctly indented, in the right section.'],
-  ['Context autocomplete', 'Only the keys valid at the cursor, plus live $ref targets and security-scheme names read from your own document.'],
-  ['Postman import', 'Drop a collection export and get clean OpenAPI 3: auth mapped, saved responses kept as named examples, noise headers removed.'],
-  ['Converters and exports', 'Swagger 2.0 → OpenAPI 3 in one click; export Postman collections or a self-contained HTML docs file.'],
-  ['Offline and private', 'No account, no backend — documents stay in your browser. Installable as a PWA, or a single HTML file that runs from disk.']
+  ['green', icon('<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="6" y1="9" x2="9.5" y2="9"/><line x1="6" y1="13" x2="9.5" y2="13"/>'),
+    'Live preview', 'YAML on the left, rendered Swagger UI on the right — updated as you type, with the dark theme the ecosystem never shipped.'],
+  ['blue', icon('<path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>'),
+    'Version-aware validation', 'Errors and warnings tuned to Swagger 2.0, OpenAPI 3.0, 3.1 and 3.2 — clickable, explained, and most with a one-click Fix.'],
+  ['orange', icon('<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>'),
+    'Stateful mock server', 'Try it out without a backend: POST creates records in the page, GET lists them back, schemas become realistic examples.'],
+  ['purple', icon('<rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>'),
+    'Insert menu', 'A CRUD resource, endpoint, parameter, response, schema or security scheme — inserted correctly indented, in the right section.'],
+  ['blue', icon('<path d="M11 4l1.5 4.5L17 10l-4.5 1.5L11 16l-1.5-4.5L5 10l4.5-1.5z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/>'),
+    'Context autocomplete', 'Only the keys valid at the cursor, plus live $ref targets and security-scheme names read from your own document.'],
+  ['green', icon('<path d="M12 3v9"/><path d="M8 8l4 4 4-4"/><rect x="4" y="15" width="16" height="6" rx="2"/>'),
+    'Postman import', 'Drop a collection export and get clean OpenAPI 3: auth mapped, saved responses kept as named examples, noise headers removed.'],
+  ['orange', icon('<path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>'),
+    'Converters and exports', 'Swagger 2.0 → OpenAPI 3 in one click; export Postman collections or a self-contained HTML docs file.'],
+  ['purple', icon('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>'),
+    'Offline and private', 'No account, no backend — documents stay in your browser. Installable as a PWA, or a single HTML file that runs from disk.']
 ];
+
 
 const LEARN_LINKS = [
   ['/openapi-editor/', 'Online OpenAPI editor', 'The writing experience: insert menu, autocomplete, inline rules and search.'],
@@ -364,38 +371,57 @@ writeDist('index.html', '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<h
   ogTags(landingTitle, DESCRIPTION, BASE + '/') +
   jsonLdTag(homeJsonLd) +
   '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
+  FONT_LINKS +
   '  <link rel="stylesheet" href="/assets/seo.css" />\n' +
-  '</head>\n<body>\n' +
+  '</head>\n<body class="landing-bg">\n' +
   '  <header class="site-header">\n' +
-  '    <a class="brand" href="/">' + LOGO_SVG + '<span><span style="color:#58a6ff">OAS</span>Forge</span></a>\n' +
+  '    <a class="brand" href="/">' + LOGO_SVG + '<span><span class="oas">OAS</span>Forge</span></a>\n' +
   '    ' + NAV_LINKS + '\n' +
   '  </header>\n' +
   '  <main class="content landing">\n' +
   '    <section class="hero">\n' +
-  '      <h1>The free online OpenAPI editor,<br>validator and mock server — in dark mode</h1>\n' +
-  '      <p class="lede">OASForge is a complete OpenAPI workbench that runs entirely in your browser: ' +
-  'write YAML beside a live Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API ' +
-  'against a built-in mock server, import Postman collections and export documentation — with no ' +
-  'account and no backend.</p>\n' +
+  '      <p class="eyebrow"><span class="dot g"></span>Free &amp; open source<span class="sep"></span>' +
+  '<span class="dot b"></span>No signup<span class="sep"></span><span class="dot o"></span>100% in your browser</p>\n' +
+  '      <h1>Forge better <span class="grad">OpenAPI</span> specs.<br>Right here, in the dark.</h1>\n' +
+  '      <p class="lede">OASForge is a complete OpenAPI workbench in a browser tab: write YAML beside a live ' +
+  'Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API against a built-in mock server, ' +
+  'import Postman collections and export documentation. No account, no backend — your spec never leaves the page.</p>\n' +
   '      <div class="hero-ctas">\n' +
-  '        <a class="button" href="/app/">Open the editor</a>\n' +
+  '        <a class="button" href="/app/">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
   '        <a class="button ghost" href="/guide/">Read the guide</a>\n' +
   '      </div>\n' +
-  '      <p class="hero-note">Free &amp; open source · Nothing leaves your browser · Swagger 2.0, OpenAPI 3.0 / 3.1 / 3.2</p>\n' +
+  '      <p class="hero-note"><code>swagger: "2.0"</code><span class="arrow">→</span>' +
+  '<code>openapi: 3.0</code><code>3.1</code><code>3.2</code> — every version, one editor</p>\n' +
   '    </section>\n' +
-  '    <figure class="shot">\n' +
+  '    <figure class="frame">\n' +
+  '      <div class="frame-bar"><span></span><span></span><span></span><em>oasforge.dev/app</em></div>\n' +
   '      <a href="/app/"><img src="/assets/app-screenshot.jpg" width="2160" height="1320" ' +
   'alt="OASForge workbench: the demo API rendered in dark-mode Swagger UI with operation search" loading="eager" /></a>\n' +
   '    </figure>\n' +
   '    <section>\n' +
-  '      <h2>Everything a spec needs, in one tab</h2>\n' +
+  '      <h2><span class="h-num">01</span>An OpenAPI editor with everything a spec needs</h2>\n' +
   '      <div class="feature-grid">\n' +
   HERO_FEATURES.map(f =>
-    '        <div class="feature"><h3>' + f[0] + '</h3><p>' + f[1] + '</p></div>').join('\n') + '\n' +
+    '        <div class="feature"><div class="f-icon ' + f[0] + '">' + f[1] + '</div>' +
+    '<h3>' + f[2] + '</h3><p>' + f[3] + '</p></div>').join('\n') + '\n' +
   '      </div>\n' +
   '    </section>\n' +
+  '    <section class="privacy">\n' +
+  '      <div class="privacy-text">\n' +
+  '        <h2><span class="h-num">02</span>Your spec is nobody’s business</h2>\n' +
+  '        <p>Most online editors quietly ship your API design to their servers. OASForge has no servers to ' +
+  'ship it to: documents, history and settings live in your browser’s local storage, and the mock server ' +
+  'answers requests inside the page. Paste the spec of an unreleased product with a clear conscience.</p>\n' +
+  '      </div>\n' +
+  '      <ul class="privacy-list">\n' +
+  '        <li>No account, no telemetry, no upload — ever</li>\n' +
+  '        <li>Works fully offline as an installable PWA</li>\n' +
+  '        <li><a href="/standalone.html">One HTML file</a> runs from a double-click, no web server</li>\n' +
+  '        <li>Open source under the Elastic License 2.0</li>\n' +
+  '      </ul>\n' +
+  '    </section>\n' +
   '    <section>\n' +
-  '      <h2>From blank page to documented API</h2>\n' +
+  '      <h2><span class="h-num">03</span>From blank page to documented API</h2>\n' +
   '      <ol class="steps">\n' +
   '        <li><strong>Bring a document in.</strong> Start from the template, paste YAML or JSON, open a file, ' +
   'fetch a URL, or drop a Postman collection — Swagger 2.0 gets a one-click upgrade to OpenAPI 3.</li>\n' +
@@ -406,19 +432,20 @@ writeDist('index.html', '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<h
   '      </ol>\n' +
   '    </section>\n' +
   '    <section>\n' +
-  '      <h2>Dig deeper</h2>\n' +
+  '      <h2><span class="h-num">04</span>Dig deeper</h2>\n' +
   '      <ul class="learn-list">\n' +
   LEARN_LINKS.map(l =>
-    '        <li><a href="' + l[0] + '">' + l[1] + '</a><span>' + l[2] + '</span></li>').join('\n') + '\n' +
+    '        <li><a href="' + l[0] + '">' + l[1] + ' <span class="lnk-arrow">→</span></a><span>' + l[2] + '</span></li>').join('\n') + '\n' +
   '      </ul>\n' +
   '    </section>\n' +
   '    <section>\n' +
-  '      <h2>Questions, answered</h2>\n' +
+  '      <h2><span class="h-num">05</span>Questions, answered</h2>\n' +
   FAQ.slice(0, 4).map(f =>
     '      <div class="faq-item"><h3>' + esc(f.q) + '</h3><p>' + esc(f.a) + '</p></div>').join('\n') + '\n' +
   '      <p><a href="/faq/">All questions →</a></p>\n' +
   '    </section>\n' +
   '    <div class="cta-block">\n' +
+  '      <h2>Ready when you are</h2>\n' +
   '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
   '      <a class="button" href="/app/">Open the OASForge editor</a>\n' +
   '    </div>\n' +
