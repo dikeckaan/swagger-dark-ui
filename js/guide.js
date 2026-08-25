@@ -220,25 +220,40 @@
     overlay.addEventListener('mousedown', function (e) {
       if (e.target === overlay) close();
     });
+    function setActive(index) {
+      for (var j = 0; j < links.length; j++) {
+        links[j].classList.toggle('active', j === index);
+      }
+    }
+
     for (var i = 0; i < links.length; i++) {
       links[i].addEventListener('click', function (e) {
         e.preventDefault();
         var target = overlay.querySelector('#' + this.getAttribute('data-target'));
-        if (target) content.scrollTo({ top: target.offsetTop - 8, behavior: 'smooth' });
+        if (!target) return;
+        // Highlight immediately — the spy confirms once the scroll settles.
+        var self = this;
+        for (var k = 0; k < links.length; k++) {
+          if (links[k] === self) setActive(k);
+        }
+        content.scrollTo({ top: target.offsetTop - 8, behavior: 'smooth' });
       });
     }
 
-    // Scroll-spy: highlight the section currently at the top of the viewport.
+    // Scroll-spy: highlight the section currently at the top of the viewport;
+    // at the very bottom the last section wins regardless of its height.
     function spy() {
-      var top = content.scrollTop + 40;
-      var active = 0;
       var sections = content.querySelectorAll('.g-section');
-      for (var i = 0; i < sections.length; i++) {
-        if (sections[i].offsetTop <= top) active = i;
+      var active = 0;
+      if (content.scrollTop + content.clientHeight >= content.scrollHeight - 2) {
+        active = sections.length - 1;
+      } else {
+        var top = content.scrollTop + 40;
+        for (var i = 0; i < sections.length; i++) {
+          if (sections[i].offsetTop <= top) active = i;
+        }
       }
-      for (var j = 0; j < links.length; j++) {
-        links[j].classList.toggle('active', j === active);
-      }
+      setActive(active);
     }
     content.addEventListener('scroll', spy);
     spy();
