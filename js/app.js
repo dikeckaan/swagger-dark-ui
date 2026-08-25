@@ -630,6 +630,9 @@
 
     if (window.SduiFindbar && editor.getSearchCursor) {
       var findbar = SduiFindbar.init({ editor: editor });
+      document.getElementById('editor-find').addEventListener('click', function () {
+        findbar.open();
+      });
       // Ctrl/Cmd+F opens the in-code find bar whenever the editor pane is
       // visible; plain preview pages keep the browser's native find.
       document.addEventListener('keydown', function (e) {
