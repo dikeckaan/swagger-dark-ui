@@ -1098,6 +1098,13 @@ li.CodeMirror-hint-active { background: var(--accent); color: #fff; }
   outline: none;
 }
 .g-section { margin-bottom: 34px; }
+/* Let even the short trailing sections scroll all the way to the top, so
+   nav clicks land exactly and the scroll-spy can mark them active. */
+.g-content::after {
+  content: "";
+  display: block;
+  height: calc(100% - 180px);
+}
 .g-section h2 {
   display: flex;
   align-items: baseline;
