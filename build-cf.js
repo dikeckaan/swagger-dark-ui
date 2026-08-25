@@ -35,16 +35,18 @@ const mustReplace = (s, from, to, what) => {
   return out;
 };
 
-/* ── 1. Fresh copy of the app ──────────────────────────────────────────── */
+/* ── 1. Fresh copy of the app under /app/ ──────────────────────────────── */
+// SEO-first layout: the root URL is a fully crawlable landing page; the
+// interactive workbench lives at /app/ (its own PWA scope).
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });
 for (const entry of ['index.html', 'manifest.webmanifest', 'sw.js', 'LICENSE',
                      'css', 'js', 'vendor', 'specs', 'icons']) {
-  fs.cpSync(path.join(ROOT, entry), path.join(DIST, entry), { recursive: true });
+  fs.cpSync(path.join(ROOT, entry), path.join(DIST, 'app', entry), { recursive: true });
 }
 
 /* ── 2. Rebrand the copies to OASForge ─────────────────────────────────── */
-let index = readDist('index.html');
+let index = readDist('app/index.html');
 // The mirror's cross-domain canonical would duplicate the one injected below.
 index = index
   .replace(/^\s*<!-- The canonical home[\s\S]*?-->\n/m, '')
@@ -68,22 +70,22 @@ index = mustReplace(index,
   '<span class="sdui-subtitle">OpenAPI 3.1 full-feature showcase</span>',
   '<span class="sdui-subtitle">The dark OpenAPI workbench</span>',
   'header subtitle');
-writeDist('index.html', index);
+writeDist('app/index.html', index);
 
-let appjs = readDist('js/app.js');
+let appjs = readDist('app/js/app.js');
 appjs = appjs.split("' · Swagger Dark UI'").join("' · OASForge'");
 if (appjs.includes('Swagger Dark UI\'')) throw new Error('app.js still sets a Swagger Dark UI title');
-writeDist('js/app.js', appjs);
+writeDist('app/js/app.js', appjs);
 
-let guidejs = readDist('js/guide.js').split('Swagger Dark UI').join('OASForge');
+let guidejs = readDist('app/js/guide.js').split('Swagger Dark UI').join('OASForge');
 guidejs = mustReplace(guidejs,
   'OASForge is designed, built and maintained by',
   'OASForge — formerly <em>Swagger Dark UI</em> — is designed, built and maintained by',
   'guide about "formerly" note');
-writeDist('js/guide.js', guidejs);
+writeDist('app/js/guide.js', guidejs);
 
-writeDist('manifest.webmanifest', JSON.stringify({
-  ...JSON.parse(readDist('manifest.webmanifest')),
+writeDist('app/manifest.webmanifest', JSON.stringify({
+  ...JSON.parse(readDist('app/manifest.webmanifest')),
   name: 'OASForge',
   short_name: 'OASForge',
   description: 'The dark OpenAPI workbench: editor, validation, mock server, import/export — fully offline.'
@@ -92,7 +94,7 @@ writeDist('manifest.webmanifest', JSON.stringify({
 /* ── 3. Single-file offline build from the rebranded copy ──────────────── */
 execFileSync(process.execPath, [
   path.join(ROOT, 'build-standalone.js'),
-  '--root', DIST, '--out', path.join(DIST, 'standalone.html')
+  '--root', path.join(DIST, 'app'), '--out', path.join(DIST, 'standalone.html')
 ], { stdio: 'inherit' });
 // The download artifact should not compete with the homepage in search.
 writeDist('standalone.html',
@@ -121,7 +123,7 @@ const homeJsonLd = {
       '@type': 'WebApplication', '@id': BASE + '/#app',
       name: 'OASForge',
       alternateName: 'Swagger Dark UI',
-      url: BASE + '/',
+      url: BASE + '/app/',
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'Any',
       browserRequirements: 'Requires JavaScript',
@@ -179,6 +181,8 @@ const FOOTER_HTML =
   '      <div>\n' +
   '        <h2>OASForge</h2>\n' +
   '        <ul>\n' +
+  '          <li><a href="/">Home</a></li>\n' +
+  '          <li><a href="/app/">Open the editor</a></li>\n' +
   '          <li><a href="/guide/">User guide</a></li>\n' +
   '          <li><a href="/faq/">FAQ</a></li>\n' +
   '          <li><a href="/standalone.html">Offline single-file app</a></li>\n' +
@@ -204,23 +208,26 @@ const FOOTER_HTML =
   '      </div>\n' +
   '    </div>\n' +
   '    <div class="legal">© 2026 <a href="https://kaandikec.com" rel="noopener">Kaan Dikeç</a> · ' +
-  'OASForge, formerly Swagger Dark UI, is an independent project — not affiliated with SmartBear or the OpenAPI Initiative.</div>\n' +
+  'OASForge — formerly Swagger Dark UI — is an independent open-source project.</div>\n' +
   '  </footer>\n';
 
-index = readDist('index.html');
+index = readDist('app/index.html');
 index = mustReplace(index, '</title>',
   '</title>\n' +
-  ogTags('OASForge — Free Online OpenAPI Editor, Validator &amp; Mock Server', DESCRIPTION, BASE + '/') +
-  jsonLdTag(homeJsonLd) +
+  ogTags('OASForge Editor — The OpenAPI Workbench in Your Browser',
+    'The OASForge workbench: write, validate, preview and mock OpenAPI documents in your browser.',
+    BASE + '/app/') +
   FOOTER_CSS,
-  'index head injection');
-index = mustReplace(index, /(<\/main>)/, '$1\n' + FOOTER_HTML, 'index footer injection');
-writeDist('index.html', index);
+  'app head injection');
+index = mustReplace(index, /(<\/main>)/, '$1\n' + FOOTER_HTML, 'app footer injection');
+writeDist('app/index.html', index);
 
 /* ── 5. Static content pages ───────────────────────────────────────────── */
 fs.mkdirSync(path.join(DIST, 'assets'), { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'site-cf/seo.css'), path.join(DIST, 'assets/seo.css'));
 fs.copyFileSync(path.join(ROOT, 'site-cf/og-image.png'), path.join(DIST, 'og-image.png'));
+fs.copyFileSync(path.join(ROOT, 'site-cf/app-screenshot.jpg'), path.join(DIST, 'assets/app-screenshot.jpg'));
+fs.copyFileSync(path.join(ROOT, 'icons/logo.svg'), path.join(DIST, 'assets/logo.svg'));
 
 const LOGO_SVG = read('icons/logo.svg')
   .replace(/<\?xml[^?]*\?>\s*/, '')
@@ -233,7 +240,7 @@ const NAV_LINKS =
   '<a href="/guide/">Guide</a>' +
   '<a href="/faq/">FAQ</a>' +
   '<a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a>' +
-  '<a class="cta" href="/">Open the editor</a>' +
+  '<a class="cta" href="/app/">Open the editor</a>' +
   '</nav>';
 
 const PAGE_FOOTER = FOOTER_HTML
@@ -258,7 +265,7 @@ function layout(p) {
     ogTags(esc(p.title), esc(p.description), url) +
     jsonLdTag(crumbs) +
     (p.jsonLd ? jsonLdTag(p.jsonLd) : '') +
-    '  <link rel="icon" href="/icons/logo.svg" type="image/svg+xml" />\n' +
+    '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
     '  <link rel="stylesheet" href="/assets/seo.css" />\n' +
     '</head>\n<body>\n' +
     '  <header class="site-header">\n' +
@@ -270,7 +277,7 @@ function layout(p) {
     p.body + '\n' +
     '    <div class="cta-block">\n' +
     '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
-    '      <a class="button" href="/">Open the OASForge editor</a>\n' +
+    '      <a class="button" href="/app/">Open the OASForge editor</a>\n' +
     '    </div>\n' +
     '  </main>\n' +
     PAGE_FOOTER +
@@ -300,7 +307,7 @@ writeDist('faq/index.html', layout({
 
 /* Guide page — generated from the same SECTIONS the in-app guide renders,
    so the two can never drift apart. */
-const guideSrc = readDist('js/guide.js');
+const guideSrc = readDist('app/js/guide.js');
 const m = guideSrc.match(/var SECTIONS = (\[[\s\S]*?\n {2}\]);/);
 if (!m) throw new Error('could not extract SECTIONS from js/guide.js');
 const kbd = keys => keys.split(' ').map(k => '<kbd>' + k + '</kbd>').join(' + '); // eslint-disable-line
@@ -326,8 +333,121 @@ writeDist('guide/index.html', layout({
       '<div class="table-wrap">' + s.html + '</div></section>').join('\n')
 }));
 
-/* ── 6. Crawler plumbing ───────────────────────────────────────────────── */
-const urls = ['/', '/guide/', '/faq/'].concat(PAGES.map(p => '/' + p.slug + '/'));
+/* ── 6. Landing page at the root ───────────────────────────────────────── */
+const HERO_FEATURES = [
+  ['Live preview', 'YAML on the left, rendered Swagger UI on the right — updated as you type, with the dark theme the ecosystem never shipped.'],
+  ['Version-aware validation', 'Errors and warnings tuned to Swagger 2.0, OpenAPI 3.0, 3.1 and 3.2 — clickable, explained, and most with a one-click Fix.'],
+  ['Stateful mock server', 'Try it out without a backend: POST creates records in the page, GET lists them back, schemas become realistic examples.'],
+  ['Insert menu', 'A CRUD resource, endpoint, parameter, response, schema or security scheme — inserted correctly indented, in the right section.'],
+  ['Context autocomplete', 'Only the keys valid at the cursor, plus live $ref targets and security-scheme names read from your own document.'],
+  ['Postman import', 'Drop a collection export and get clean OpenAPI 3: auth mapped, saved responses kept as named examples, noise headers removed.'],
+  ['Converters and exports', 'Swagger 2.0 → OpenAPI 3 in one click; export Postman collections or a self-contained HTML docs file.'],
+  ['Offline and private', 'No account, no backend — documents stay in your browser. Installable as a PWA, or a single HTML file that runs from disk.']
+];
+
+const LEARN_LINKS = [
+  ['/openapi-editor/', 'Online OpenAPI editor', 'The writing experience: insert menu, autocomplete, inline rules and search.'],
+  ['/openapi-validator/', 'OpenAPI validator', 'What the linter catches and how quick fixes repair a document.'],
+  ['/openapi-mock-server/', 'In-browser mock server', 'Stateful Try-it-out with forced status codes and simulated latency.'],
+  ['/postman-to-openapi/', 'Postman to OpenAPI', 'How collections become clean OpenAPI 3 — auth, examples, headers.'],
+  ['/swagger-editor-alternative/', 'Swagger Editor alternative', 'An honest side-by-side with the original editor.'],
+  ['/guide/', 'User guide', 'The complete reference manual, section by section.'],
+  ['/faq/', 'FAQ', 'Privacy, versions, offline use and licensing, answered.']
+];
+
+const landingTitle = 'OASForge — Free Online OpenAPI Editor, Validator &amp; Mock Server';
+writeDist('index.html', '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<head>\n' +
+  '  <meta charset="UTF-8" />\n' +
+  '  <meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
+  '  <title>' + landingTitle + '</title>\n' +
+  '  <meta name="description" content="' + esc(DESCRIPTION) + ' Free and open source — no signup, nothing leaves your browser." />\n' +
+  ogTags(landingTitle, DESCRIPTION, BASE + '/') +
+  jsonLdTag(homeJsonLd) +
+  '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
+  '  <link rel="stylesheet" href="/assets/seo.css" />\n' +
+  '</head>\n<body>\n' +
+  '  <header class="site-header">\n' +
+  '    <a class="brand" href="/">' + LOGO_SVG + '<span><span style="color:#58a6ff">OAS</span>Forge</span></a>\n' +
+  '    ' + NAV_LINKS + '\n' +
+  '  </header>\n' +
+  '  <main class="content landing">\n' +
+  '    <section class="hero">\n' +
+  '      <h1>The free online OpenAPI editor,<br>validator and mock server — in dark mode</h1>\n' +
+  '      <p class="lede">OASForge is a complete OpenAPI workbench that runs entirely in your browser: ' +
+  'write YAML beside a live Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API ' +
+  'against a built-in mock server, import Postman collections and export documentation — with no ' +
+  'account and no backend.</p>\n' +
+  '      <div class="hero-ctas">\n' +
+  '        <a class="button" href="/app/">Open the editor</a>\n' +
+  '        <a class="button ghost" href="/guide/">Read the guide</a>\n' +
+  '      </div>\n' +
+  '      <p class="hero-note">Free &amp; open source · Nothing leaves your browser · Swagger 2.0, OpenAPI 3.0 / 3.1 / 3.2</p>\n' +
+  '    </section>\n' +
+  '    <figure class="shot">\n' +
+  '      <a href="/app/"><img src="/assets/app-screenshot.jpg" width="2160" height="1320" ' +
+  'alt="OASForge workbench: the demo API rendered in dark-mode Swagger UI with operation search" loading="eager" /></a>\n' +
+  '    </figure>\n' +
+  '    <section>\n' +
+  '      <h2>Everything a spec needs, in one tab</h2>\n' +
+  '      <div class="feature-grid">\n' +
+  HERO_FEATURES.map(f =>
+    '        <div class="feature"><h3>' + f[0] + '</h3><p>' + f[1] + '</p></div>').join('\n') + '\n' +
+  '      </div>\n' +
+  '    </section>\n' +
+  '    <section>\n' +
+  '      <h2>From blank page to documented API</h2>\n' +
+  '      <ol class="steps">\n' +
+  '        <li><strong>Bring a document in.</strong> Start from the template, paste YAML or JSON, open a file, ' +
+  'fetch a URL, or drop a Postman collection — Swagger 2.0 gets a one-click upgrade to OpenAPI 3.</li>\n' +
+  '        <li><strong>Shape it fast.</strong> The insert menu writes correct structure, autocomplete offers only ' +
+  'valid keys, and the validator explains every issue with a fix attached.</li>\n' +
+  '        <li><strong>Try it and ship it.</strong> Exercise the API against the in-page mock server, then export ' +
+  'a Postman collection, standalone HTML docs, or a share link.</li>\n' +
+  '      </ol>\n' +
+  '    </section>\n' +
+  '    <section>\n' +
+  '      <h2>Dig deeper</h2>\n' +
+  '      <ul class="learn-list">\n' +
+  LEARN_LINKS.map(l =>
+    '        <li><a href="' + l[0] + '">' + l[1] + '</a><span>' + l[2] + '</span></li>').join('\n') + '\n' +
+  '      </ul>\n' +
+  '    </section>\n' +
+  '    <section>\n' +
+  '      <h2>Questions, answered</h2>\n' +
+  FAQ.slice(0, 4).map(f =>
+    '      <div class="faq-item"><h3>' + esc(f.q) + '</h3><p>' + esc(f.a) + '</p></div>').join('\n') + '\n' +
+  '      <p><a href="/faq/">All questions →</a></p>\n' +
+  '    </section>\n' +
+  '    <div class="cta-block">\n' +
+  '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
+  '      <a class="button" href="/app/">Open the OASForge editor</a>\n' +
+  '    </div>\n' +
+  '  </main>\n' +
+  PAGE_FOOTER +
+  '</body>\n</html>\n');
+
+// Earlier deploys served the app (and registered its service worker) at the
+// root scope. This replacement worker cleans those clients up: it drops the
+// old caches, unregisters itself and reloads, so visitors get the landing
+// page instead of a cached copy of the app.
+writeDist('sw.js',
+  "'use strict';\n" +
+  "self.addEventListener('install', function () { self.skipWaiting(); });\n" +
+  "self.addEventListener('activate', function (event) {\n" +
+  '  event.waitUntil(caches.keys().then(function (keys) {\n' +
+  "    return Promise.all(keys.filter(function (k) { return k.indexOf('sdui-') === 0; })\n" +
+  '      .map(function (k) { return caches.delete(k); }));\n' +
+  '  }).then(function () {\n' +
+  '    return self.registration.unregister();\n' +
+  "  }).then(function () {\n" +
+  "    return self.clients.matchAll({ type: 'window' });\n" +
+  '  }).then(function (clients) {\n' +
+  '    clients.forEach(function (c) { c.navigate(c.url); });\n' +
+  '  }));\n' +
+  '});\n');
+
+/* ── 7. Crawler plumbing ───────────────────────────────────────────────── */
+const urls = ['/', '/app/', '/guide/', '/faq/'].concat(PAGES.map(p => '/' + p.slug + '/'));
 const today = new Date().toISOString().slice(0, 10);
 writeDist('sitemap.xml',
   '<?xml version="1.0" encoding="UTF-8"?>\n' +
@@ -349,8 +469,8 @@ writeDist('404.html', layout({
 
 /* Cache and security headers (Workers static assets honors _headers). */
 writeDist('_headers',
-  '/vendor/*\n  Cache-Control: public, max-age=31536000, immutable\n' +
-  '/icons/*\n  Cache-Control: public, max-age=86400\n' +
+  '/app/vendor/*\n  Cache-Control: public, max-age=31536000, immutable\n' +
+  '/app/icons/*\n  Cache-Control: public, max-age=86400\n' +
   '/og-image.png\n  Cache-Control: public, max-age=86400\n' +
   '/assets/*\n  Cache-Control: public, max-age=86400\n' +
   '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n');

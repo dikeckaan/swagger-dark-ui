@@ -15,11 +15,11 @@
     // serve dist-cf/404.html (with its noindex) for unknown paths
     "not_found_handling": "404-page"
   },
-  // Enable once the oasforge.dev zone is added to the Cloudflare account
-  // (Dashboard -> Add a domain, or buy it via Cloudflare Registrar).
-  // Until then the site is reachable at https://oasforge.<subdomain>.workers.dev
-  "routes": [
-    { "pattern": "oasforge.dev", "custom_domain": true },
-    { "pattern": "www.oasforge.dev", "custom_domain": true }
-  ]
+  // The oasforge.dev custom domain is attached via the dashboard
+  // (Worker -> Settings -> Domains & Routes). Alternatively, once the zone
+  // is in the account, uncomment to manage it from here:
+  // "routes": [
+  //   { "pattern": "oasforge.dev", "custom_domain": true },
+  //   { "pattern": "www.oasforge.dev", "custom_domain": true }
+  // ]
 }

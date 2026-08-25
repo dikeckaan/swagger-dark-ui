@@ -224,7 +224,7 @@ const FAQ = [
   },
   {
     q: 'Who builds OASForge?',
-    a: 'OASForge — formerly Swagger Dark UI — is designed, built and maintained by Kaan Dikeç. It is an independent project, not affiliated with SmartBear or the OpenAPI Initiative.'
+    a: 'OASForge — formerly Swagger Dark UI — is designed, built and maintained by Kaan Dikeç as an independent open-source project.'
   }
 ];
 
