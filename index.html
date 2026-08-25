@@ -151,6 +151,13 @@
         <button id="editor-url-go" class="sdui-tool-btn" type="button">Fetch</button>
         <button id="editor-url-cancel" class="sdui-tool-btn" type="button">Cancel</button>
       </div>
+      <div id="editor-findbar" hidden>
+        <input id="findbar-input" type="text" placeholder="Find in code… (Enter: next · Shift+Enter: previous · Esc: close)" />
+        <span id="findbar-count"></span>
+        <button id="findbar-prev" class="sdui-tool-btn" type="button" title="Previous match (Shift+Enter)">↑</button>
+        <button id="findbar-next" class="sdui-tool-btn" type="button" title="Next match (Enter)">↓</button>
+        <button id="findbar-close" class="sdui-tool-btn" type="button" title="Close (Esc)">×</button>
+      </div>
       <div id="editor-host"></div>
       <div id="editor-convert20" hidden>
         <span>This is a Swagger 2.0 document — the editor's tooling targets OpenAPI 3.</span>
@@ -161,18 +168,32 @@
       <div id="editor-status" class="ok" role="status">Valid — rendering live</div>
       <div id="split-handle" title="Drag to resize the editor · double-click to reset"></div>
     </aside>
-    <main id="swagger-ui" aria-live="polite"></main>
+    <main id="preview-pane">
+      <div id="preview-search">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="m15.5 15.5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input id="opsearch-input" type="search"
+               placeholder="Search operations — path, method, summary, parameters, schema fields, status codes…" />
+        <span id="opsearch-count"></span>
+      </div>
+      <div id="swagger-ui" aria-live="polite"></div>
+    </main>
   </div>
 
   <script src="vendor/swagger-ui-bundle.js"></script>
   <script src="vendor/codemirror.min.js"></script>
   <script src="vendor/yaml.min.js"></script>
   <script src="vendor/show-hint.min.js"></script>
+  <script src="vendor/searchcursor.min.js"></script>
   <script src="vendor/js-yaml.min.js"></script>
   <script src="vendor/lz-string.min.js"></script>
   <script src="js/validate.js"></script>
   <script src="js/snippets.js"></script>
   <script src="js/constraints.js"></script>
+  <script src="js/findbar.js"></script>
+  <script src="js/opsearch.js"></script>
   <script src="js/autocomplete.js"></script>
   <script src="js/quickfix.js"></script>
   <script src="js/convert20.js"></script>

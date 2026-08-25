@@ -507,6 +507,64 @@ body, .sdui-header, .swagger-ui,
 
 #swagger-ui { max-width: 1460px; margin: 0 auto; padding: 8px 6px 80px; }
 
+/* full-text operation search above the preview */
+#preview-search {
+  position: sticky;
+  top: var(--header-h, 55px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 1460px;
+  margin: 0 auto;
+  padding: 8px 10px;
+  color: var(--text-faint);
+  background: color-mix(in srgb, var(--bg, var(--surface)) 86%, transparent);
+  backdrop-filter: blur(8px);
+}
+body.editor-active #preview-search { top: 0; max-width: none; padding: 8px 18px; }
+#opsearch-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+#opsearch-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+#opsearch-count { flex: none; font-size: 12px; font-weight: 600; color: var(--status-ok); min-width: 44px; text-align: right; }
+#opsearch-count.none { color: var(--status-err); }
+
+/* in-editor find bar (Ctrl/Cmd+F) */
+#editor-findbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+#findbar-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+#findbar-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+#findbar-count { flex: none; font-size: 11.5px; font-weight: 600; color: var(--status-ok); min-width: 48px; text-align: center; }
+#findbar-count.none { color: var(--status-err); }
+#editor-host .cm-find-match {
+  background: color-mix(in srgb, var(--status-warn) 32%, transparent);
+  border-radius: 2px;
+}
+
 /* ---------- workspace / custom spec editor ---------- */
 
 body.editor-active #workspace {
@@ -516,14 +574,16 @@ body.editor-active #workspace {
   height: calc(100dvh - var(--header-h, 55px));
 }
 
-body.editor-active #swagger-ui {
-  max-width: none;
-  width: 100%;
-  margin: 0;
+body.editor-active #preview-pane {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   height: 100%;
+}
+body.editor-active #swagger-ui {
+  max-width: none;
+  width: 100%;
+  margin: 0;
   padding: 8px 18px 80px;
 }
 
@@ -544,7 +604,7 @@ body.editor-active #swagger-ui {
 /* single-pane layouts inside custom editor mode */
 body.editor-active[data-layout="editor"] #workspace,
 body.editor-active[data-layout="preview"] #workspace { grid-template-columns: 1fr; }
-body.editor-active[data-layout="editor"] #swagger-ui { display: none; }
+body.editor-active[data-layout="editor"] #preview-pane { display: none; }
 body.editor-active[data-layout="editor"] #editor-pane { border-right: none; }
 body.editor-active[data-layout="preview"] #editor-pane { display: none; }
 
@@ -1010,7 +1070,7 @@ li.CodeMirror-hint-active { background: var(--accent); color: #fff; }
     height: calc(100dvh - var(--header-h, 55px));
   }
   #editor-pane { border-right: none; border-bottom: 1px solid var(--border); }
-  body.editor-active #swagger-ui { height: auto; }
+  body.editor-active #preview-pane { height: auto; }
 }
 
 .sdui-load-error {
