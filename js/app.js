@@ -889,6 +889,10 @@
   }
 
   function shareSpec() {
+    if (!/^https?:$/.test(window.location.protocol)) {
+      setEditorStatus('err', 'Share links need the hosted version of the site — this copy runs from a local file');
+      return;
+    }
     var data = LZString.compressToEncodedURIComponent(editor.getValue());
     var link = window.location.origin + window.location.pathname + '?spec=custom#s=' + data;
     copyText(link).then(function () {
@@ -1116,7 +1120,12 @@
     params.set('spec', specId);
     // Keep deep-link hashes (#/Tag/operationId); drop only consumed share payloads.
     var hash = window.location.hash.indexOf('#s=') === 0 ? '' : window.location.hash;
-    history.replaceState(null, '', window.location.pathname + '?' + params.toString() + hash);
+    try {
+      history.replaceState(null, '', window.location.pathname + '?' + params.toString() + hash);
+    } catch (e) {
+      // Opaque origins (Android content://, sandboxed viewers) refuse URL
+      // rewrites — the app must keep working without deep-linkable URLs.
+    }
 
     var isCustom = specId === 'custom';
     editorPane.hidden = !isCustom;
