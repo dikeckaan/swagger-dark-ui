@@ -9,8 +9,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = __dirname;
-const OUT = path.join(ROOT, 'standalone.html');
+// Optional overrides so other builds (e.g. build-cf.js) can run this against
+// a prepared copy of the site:  node build-standalone.js --root DIR --out FILE
+const argv = process.argv.slice(2);
+const opt = (name, dflt) => {
+  const i = argv.indexOf(name);
+  return i !== -1 && argv[i + 1] ? path.resolve(argv[i + 1]) : dflt;
+};
+const ROOT = opt('--root', __dirname);
+const OUT = opt('--out', path.join(ROOT, 'standalone.html'));
 
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 // Two sequences break inline <script> content: "</script" ends the tag, and
@@ -23,6 +30,8 @@ let html = read('index.html');
 
 // The PWA pieces don't apply to a single local file.
 html = html
+  .replace(/^\s*<!-- The canonical home[\s\S]*?-->\n/m, '')
+  .replace(/^\s*<link rel="canonical"[^>]*\/>\n/m, '')
   .replace(/^\s*<link rel="manifest"[^>]*\/>\n/m, '')
   .replace(/^\s*<link rel="apple-touch-icon"[^>]*\/>\n/m, '')
   .replace(/  <script>\n    \/\/ Installable app[\s\S]*?<\/script>\n/, '');

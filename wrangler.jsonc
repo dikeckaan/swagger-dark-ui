@@ -1,0 +1,25 @@
+// OASForge — Cloudflare Workers static hosting (oasforge.dev).
+// Assets-only Worker: there is no Worker script, so requests are served
+// directly from Cloudflare's static asset store — unlimited and free
+// (static asset requests are not billed on any Workers plan).
+//
+// Deploy:  node build-cf.js && npx wrangler deploy
+// (or let .github/workflows/deploy-cf.yml do it on every push to main)
+{
+  "name": "oasforge",
+  "compatibility_date": "2025-08-01",
+  "assets": {
+    "directory": "./dist-cf",
+    // /guide -> /guide/ -> guide/index.html
+    "html_handling": "auto-trailing-slash",
+    // serve dist-cf/404.html (with its noindex) for unknown paths
+    "not_found_handling": "404-page"
+  },
+  // Enable once the oasforge.dev zone is added to the Cloudflare account
+  // (Dashboard -> Add a domain, or buy it via Cloudflare Registrar).
+  // Until then the site is reachable at https://oasforge.<subdomain>.workers.dev
+  "routes": [
+    { "pattern": "oasforge.dev", "custom_domain": true },
+    { "pattern": "www.oasforge.dev", "custom_domain": true }
+  ]
+}

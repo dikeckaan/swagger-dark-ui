@@ -1,0 +1,36 @@
+name: Deploy OASForge to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      # The workflow is a quiet no-op until the Cloudflare secrets are set
+      # (repo Settings -> Secrets and variables -> Actions):
+      #   CLOUDFLARE_API_TOKEN   - token with the "Edit Cloudflare Workers" template
+      #   CLOUDFLARE_ACCOUNT_ID  - Workers & Pages overview, right sidebar
+      - name: Check Cloudflare secrets
+        id: cf
+        run: echo "ok=${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}" >> "$GITHUB_OUTPUT"
+      - name: Build Cloudflare edition (dist-cf)
+        if: steps.cf.outputs.ok == 'true'
+        run: node build-cf.js
+      - name: Deploy to Cloudflare Workers
+        if: steps.cf.outputs.ok == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
