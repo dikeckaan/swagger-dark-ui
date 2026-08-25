@@ -1,9 +1,25 @@
-# 🌙 Swagger Dark UI
+<div align="center">
+  <img src="icons/logo.svg" width="112" alt="Swagger Dark UI — braces wrapping method-colored API routes" />
+  <h1>Swagger Dark UI</h1>
+  <p><strong>The dark-themed OpenAPI workbench — editor, validator, mock server,<br>converters and exporters in a single static page.</strong></p>
+  <p>
+    Crafted and maintained by <a href="https://kaandikec.com"><strong>Kaan Dikeç</strong></a>
+    · <a href="https://github.com/dikeckaan">@dikeckaan</a>
+  </p>
+  <p>
+    <a href="https://kaandikec.com/swagger-dark-ui/"><strong>Live demo</strong></a>
+    &nbsp;·&nbsp;
+    <a href="https://kaandikec.com/swagger-dark-ui/standalone.html">Single-file offline app</a>
+    &nbsp;·&nbsp;
+    <a href="#license">License (ELv2)</a>
+  </p>
+</div>
+
+---
 
 A polished, **dark-themed Swagger UI showcase** that demonstrates every feature
-Swagger UI can render — deployed as a fully static site on GitHub Pages.
-
-**Live demo → https://kaandikec.com/swagger-dark-ui/**
+Swagger UI can render — deployed as a fully static site on GitHub Pages, and
+grown into a complete OpenAPI authoring environment.
 
 ## Features
 
@@ -101,6 +117,19 @@ optional live Petstore spec view requires connectivity.
 
 Every push to `main` triggers the [Pages workflow](.github/workflows/deploy.yml),
 which publishes the repository root as a static site.
+
+## Author
+
+**Swagger Dark UI** is designed, built and maintained by
+**[Kaan Dikeç](https://kaandikec.com)** ([@dikeckaan](https://github.com/dikeckaan)) —
+from the dark theme and the demo spec to the in-browser validator, mock server
+and converters. Feedback, ideas and bug reports are always welcome via
+[issues](https://github.com/dikeckaan/swagger-dark-ui/issues).
+
+<p align="center">
+  <img src="icons/logo.svg" width="40" alt="" /><br>
+  <sub>© 2026 Kaan Dikeç · <a href="https://kaandikec.com">kaandikec.com</a></sub>
+</p>
 
 ## License
 
