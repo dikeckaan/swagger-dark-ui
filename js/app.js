@@ -1172,6 +1172,8 @@
       .then(function () { editSpecBtn.disabled = false; });
   });
 
+  if (window.SduiGuide) SduiGuide.init();
+
   if (window.SduiOpSearch) {
     SduiOpSearch.init({
       input: document.getElementById('opsearch-input'),
