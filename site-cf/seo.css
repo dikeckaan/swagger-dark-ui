@@ -1,0 +1,160 @@
+/* OASForge — static content pages (guide, FAQ, landing pages).
+   Deliberately dark-only: these pages mirror the app's default look. */
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --green: #49cc90;
+  --blue: #61affe;
+  --orange: #fca130;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.site-header .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 18px;
+}
+.site-header .brand:hover { text-decoration: none; }
+.site-header nav {
+  margin-left: auto;
+  display: flex;
+  gap: 18px;
+  font-size: 14.5px;
+  flex-wrap: wrap;
+}
+.site-header nav a { color: var(--muted); }
+.site-header nav a:hover { color: var(--text); text-decoration: none; }
+.site-header nav a.cta {
+  color: #0d1117;
+  background: var(--accent);
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+main.content {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+main.content h1 { font-size: 30px; line-height: 1.25; margin: 0 0 18px; letter-spacing: -0.3px; }
+main.content h2 { font-size: 21px; margin: 34px 0 12px; letter-spacing: -0.2px; }
+main.content p { margin: 12px 0; }
+main.content ul { padding-left: 22px; }
+main.content li { margin: 8px 0; }
+main.content code, main.content kbd {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+main.content kbd { border-bottom-width: 2px; }
+main.content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 15px;
+}
+main.content th, main.content td {
+  border: 1px solid var(--border);
+  padding: 9px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+main.content th { background: var(--panel); }
+main.content .table-wrap { overflow-x: auto; }
+
+.cta-block {
+  margin: 40px 0 8px;
+  padding: 26px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: center;
+}
+.cta-block p { margin: 0 0 16px; color: var(--muted); }
+.cta-block a.button {
+  display: inline-block;
+  background: var(--accent);
+  color: #0d1117;
+  font-weight: 700;
+  padding: 11px 26px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+.cta-block a.button:hover { text-decoration: none; filter: brightness(1.1); }
+
+/* Guide page */
+.guide-toc {
+  columns: 2;
+  gap: 32px;
+  padding: 18px 22px;
+  margin: 22px 0 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  list-style: none;
+}
+.guide-toc li { margin: 6px 0; break-inside: avoid; }
+.guide-toc .num { color: var(--muted); font: 12.5px ui-monospace, monospace; margin-right: 8px; }
+.g-section { border-top: 1px solid var(--border); margin-top: 36px; padding-top: 10px; }
+.g-section h2 .g-num { color: var(--accent); font: 15px ui-monospace, monospace; margin-right: 10px; }
+
+/* FAQ */
+.faq-item { border-top: 1px solid var(--border); padding: 18px 0 6px; }
+.faq-item h2 { margin: 0 0 8px; font-size: 18.5px; }
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  padding: 30px 24px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.site-footer .cols {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 56px;
+}
+.site-footer h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 10px; color: var(--text); }
+.site-footer ul { list-style: none; margin: 0; padding: 0; }
+.site-footer li { margin: 6px 0; }
+.site-footer a { color: var(--muted); }
+.site-footer a:hover { color: var(--text); }
+.site-footer .legal { max-width: 860px; margin: 26px auto 0; border-top: 1px solid var(--border); padding-top: 16px; }
+
+@media (max-width: 640px) {
+  .guide-toc { columns: 1; }
+  main.content h1 { font-size: 25px; }
+}

@@ -7,12 +7,15 @@
     · <a href="https://github.com/dikeckaan">@dikeckaan</a>
   </p>
   <p>
-    <a href="https://kaandikec.com/swagger-dark-ui/"><strong>Live demo</strong></a>
+    <a href="https://oasforge.dev/"><strong>oasforge.dev</strong></a>
+    &nbsp;·&nbsp;
+    <a href="https://kaandikec.com/swagger-dark-ui/">GitHub Pages mirror</a>
     &nbsp;·&nbsp;
     <a href="https://kaandikec.com/swagger-dark-ui/standalone.html">Single-file offline app</a>
     &nbsp;·&nbsp;
     <a href="#license">License (ELv2)</a>
   </p>
+  <p><sub>The hosted edition is <strong>OASForge</strong> — this repository is its source.</sub></p>
 </div>
 
 ---
@@ -115,8 +118,21 @@ optional live Petstore spec view requires connectivity.
 
 ## Deployment
 
-Every push to `main` triggers the [Pages workflow](.github/workflows/deploy.yml),
-which publishes the repository root as a static site.
+Two deployments run from the same source, both on every push to `main`:
+
+- **GitHub Pages** — the [Pages workflow](.github/workflows/deploy.yml) publishes
+  the repository root (plus the freshly built `standalone.html`) to
+  `kaandikec.com/swagger-dark-ui`.
+- **OASForge on Cloudflare** ([oasforge.dev](https://oasforge.dev/)) — the
+  [Cloudflare workflow](.github/workflows/deploy-cf.yml) runs `build-cf.js`,
+  which produces `dist-cf/`: the same app rebranded to OASForge with an
+  SEO-optimized shell — canonical/Open Graph/JSON-LD metadata, static
+  `/guide/`, `/faq/` and landing pages, `sitemap.xml`, `robots.txt` and cache
+  headers — and deploys it with Wrangler as an **assets-only Worker**
+  (static asset requests are free and unmetered on every Workers plan).
+  The workflow is a no-op until the `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID` repository secrets are set; the custom-domain
+  routes live in [`wrangler.jsonc`](wrangler.jsonc).
 
 ## Author
 
