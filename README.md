@@ -53,6 +53,16 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
+### Single-file offline app (no server at all)
+
+Download **[standalone.html](https://kaandikec.com/swagger-dark-ui/standalone.html)**
+— the entire app in one file. Double-click it and it runs from `file://`:
+no web server, no network, nothing else to install. Every script, style,
+vendored library and the demo spec are inlined; the in-browser mock keeps
+"Try it out" working. The file is rebuilt by the Pages workflow on every
+push to `main` (`build-standalone.js`), so the download is always current
+with the live site.
+
 ### Run with Docker
 
 ```bash
