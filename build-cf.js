@@ -174,6 +174,12 @@ const FOOTER_HTML =
 // No footer on the app page — it leaked under the editor layout; the landing
 // and content pages carry the internal links instead.
 let index = readDist('app/index.html');
+// In a deployed build the brand mark links to this deployment's own landing
+// page (works for both the root and the /swagger-dark-ui sub-path).
+index = mustReplace(index,
+  '<a class="sdui-brand" href="https://oasforge.dev/" title="OASForge home">',
+  '<a class="sdui-brand" href="../" title="OASForge home">',
+  'brand home link');
 index = mustReplace(index, '</title>',
   '</title>\n' +
   ogTags('OASForge Editor — The OpenAPI Workbench in Your Browser',

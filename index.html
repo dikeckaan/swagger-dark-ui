@@ -33,7 +33,9 @@
 </head>
 <body>
   <header class="sdui-header">
-    <div class="sdui-brand">
+    <!-- Deployed builds rewrite this href to "../" (the deployment's own
+         landing page); locally and in the standalone file it points home. -->
+    <a class="sdui-brand" href="https://oasforge.dev/" title="OASForge home">
       <svg class="sdui-logo" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
         <!-- an OpenAPI document: braces wrapping method-colored API routes -->
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -53,7 +55,7 @@
         <span class="sdui-title">OASForge</span>
         <span class="sdui-subtitle">The dark OpenAPI workbench</span>
       </div>
-    </div>
+    </a>
     <div class="sdui-controls">
       <label class="sdui-select-wrap">
         <span class="sdui-select-label">Spec</span>
