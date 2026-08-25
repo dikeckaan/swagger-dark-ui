@@ -279,7 +279,7 @@
       dom_id: '#swagger-ui',
       presets: [SwaggerUIBundle.presets.apis],
       deepLinking: true,
-      filter: true,
+      filter: false, // replaced by the full-text operation search (js/opsearch.js)
       displayRequestDuration: true,
       tryItOutEnabled: true,
       persistAuthorization: true,
@@ -315,21 +315,25 @@
     };
     window.ui = SwaggerUIBundle(config);
 
-    // Feed the parsed document to the in-browser mock so it can answer
-    // requests aimed at the mock server.
+    // Feed the parsed document to the in-browser mock (so it can answer
+    // requests) and to the operation search (so it can index the spec).
     window.SduiMock.setSpec(null);
-    if (SPECS[specId].mock) {
-      fetch(SPECS[specId].url)
-        .then(function (res) { return res.text(); })
-        .then(function (text) { window.SduiMock.setSpec(jsyaml.load(text)); })
-        .catch(function () { /* mock stays disabled; live servers still work */ });
-    }
+    if (window.SduiOpSearch) SduiOpSearch.setSpec(null);
+    fetch(SPECS[specId].url)
+      .then(function (res) { return res.text(); })
+      .then(function (text) {
+        var parsedSpec = jsyaml.load(text);
+        if (SPECS[specId].mock) window.SduiMock.setSpec(parsedSpec);
+        if (window.SduiOpSearch) SduiOpSearch.setSpec(parsedSpec);
+      })
+      .catch(function () { /* mock/search stay disabled; live servers still work */ });
   }
 
   function renderFromObject(specObject) {
     var config = baseConfig();
     config.spec = specObject;
     window.ui = SwaggerUIBundle(config);
+    if (window.SduiOpSearch) SduiOpSearch.setSpec(specObject);
     document.title = SPECS.custom.label + ' · Swagger Dark UI';
   }
 
@@ -622,6 +626,21 @@
 
     if (window.SduiConstraints) {
       SduiConstraints.init({ editor: editor, setStatus: setEditorStatus });
+    }
+
+    if (window.SduiFindbar && editor.getSearchCursor) {
+      var findbar = SduiFindbar.init({ editor: editor });
+      // Ctrl/Cmd+F opens the in-code find bar whenever the editor pane is
+      // visible; plain preview pages keep the browser's native find.
+      document.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey &&
+            (e.key === 'f' || e.key === 'F')) {
+          if (!document.body.classList.contains('editor-active')) return;
+          if (document.body.getAttribute('data-layout') === 'preview') return;
+          e.preventDefault();
+          findbar.open();
+        }
+      });
     }
 
     /* ----- drag-to-resize: editor/preview split + issues panel ----- */
@@ -1149,6 +1168,13 @@
       })
       .then(function () { editSpecBtn.disabled = false; });
   });
+
+  if (window.SduiOpSearch) {
+    SduiOpSearch.init({
+      input: document.getElementById('opsearch-input'),
+      count: document.getElementById('opsearch-count')
+    });
+  }
 
   if (typeof window.SwaggerUIBundle === 'undefined') {
     var el = document.getElementById('swagger-ui');

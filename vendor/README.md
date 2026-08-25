@@ -11,6 +11,7 @@ in `index.html`.
 | `codemirror.min.css`, `codemirror.min.js` | [CodeMirror 5](https://codemirror.net/5/) | 5.65.20 | MIT | `zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT`, `C7K/Pjo6rtJFtYWv792/hBOrCLhjcAa319ZhwjrDE8zCMEWglI7+S1CUEKD+q6uF` |
 | `yaml.min.js` | CodeMirror 5 YAML mode | 5.65.20 | MIT | `9q49Jm3hZMwxEMLImsxPxLiaptHpFz1PVa26Dg6SVIO+rj5kx0cgOM2+4ikKJFH9` |
 | `show-hint.min.js`, `show-hint.min.css` | CodeMirror 5 show-hint addon | 5.65.20 | MIT | (added with vendoring) |
+| `searchcursor.min.js` | CodeMirror 5 searchcursor addon | 5.65.20 | MIT | (added with vendoring) |
 | `js-yaml.min.js` | [js-yaml](https://www.npmjs.com/package/js-yaml) | 4.1.0 | MIT | `+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du` |
 | `lz-string.min.js` | [lz-string](https://www.npmjs.com/package/lz-string) | 1.5.0 | MIT | `0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7` |
 
