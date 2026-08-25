@@ -195,8 +195,7 @@
     { id: 'about', title: 'About', html:
       '<p>Swagger Dark UI is designed, built and maintained by <strong>Kaan Dikeç</strong> — from the ' +
       'dark theme and the demo specification to the in-browser validator, mock server, converters and ' +
-      'exporters. It is an independent project and is not affiliated with SmartBear or the OpenAPI ' +
-      'Initiative.</p>' +
+      'exporters. It is an independent open-source project.</p>' +
       '<table><thead><tr><th>Channel</th><th>Address</th></tr></thead><tbody>' +
       '<tr><td>Website</td><td><a href="https://kaandikec.com" target="_blank" rel="noopener">kaandikec.com</a></td></tr>' +
       '<tr><td>Source code</td><td><a href="https://github.com/dikeckaan/swagger-dark-ui" target="_blank" rel="noopener">github.com/dikeckaan/swagger-dark-ui</a></td></tr>' +
