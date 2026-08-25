@@ -9,5 +9,7 @@ COPY css /usr/share/nginx/html/css
 COPY js /usr/share/nginx/html/js
 COPY specs /usr/share/nginx/html/specs
 COPY vendor /usr/share/nginx/html/vendor
+COPY icons /usr/share/nginx/html/icons
+COPY manifest.webmanifest sw.js /usr/share/nginx/html/
 
 EXPOSE 80
