@@ -172,6 +172,11 @@
       '<p>The site is fully static and self-contained — all third-party assets are vendored, so it works ' +
       'offline and in air-gapped networks. Any static file server can host it:</p>' +
       '<pre>python3 -m http.server 8000\n# or, with Docker:\ndocker compose up   # http://localhost:8080</pre>' +
+      '<p>The site is also an installable application: browsers that support progressive web apps ' +
+      'offer an install control in the address bar (or “Add to Home Screen” on mobile). The installed ' +
+      'app opens in its own window and keeps working without a network connection — a service worker ' +
+      'caches the entire application on first visit and refreshes it in the background on later ' +
+      'loads.</p>' +
       '<p>Documents, snapshots, dismissed warnings and layout preferences live in the browser’s ' +
       'local storage of whoever is using the page; the server stores nothing.</p>'
     },

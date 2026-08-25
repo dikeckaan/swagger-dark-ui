@@ -21,6 +21,9 @@
     })();
   </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <meta name="theme-color" content="#0d1117" />
   <!-- Third-party assets are vendored (see vendor/README.md for versions and
        upstream SRI hashes), so the site works fully offline / air-gapped. -->
   <link rel="stylesheet" href="vendor/swagger-ui.css" />
@@ -219,5 +222,16 @@
   <script src="js/mock.js"></script>
   <script src="js/postman.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    // Installable app: register the service worker (relative path, so it
+    // also works when the site is served from a sub-path).
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {
+          /* e.g. file:// or an unsupported browser — the site works without it */
+        });
+      });
+    }
+  </script>
 </body>
 </html>

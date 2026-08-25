@@ -25,6 +25,7 @@ Swagger UI can render — deployed as a fully static site on GitHub Pages.
 - 🔗 **Share specs by link** — the *Share* button packs the current spec into a compressed URL hash (lz-string); no backend involved
 - ⚡ **"Try it out" really works — offline and stateful** — the default server is an in-browser mock (`js/mock.js`): `POST` really creates records (kept in memory), `GET` lists them, `PUT`/`PATCH`/`DELETE` update and remove; endpoints without stored data return schema-derived examples, the rest echo the request httpbin-style. `X-Mock-Status` forces a documented status code, `X-Mock-Delay` simulates latency. A live [httpbin.org](https://httpbin.org) server stays selectable, and Petstore runs against the live `petstore3.swagger.io` server
 - 🧾 **Request snippets** — every operation shows ready-to-copy cURL (bash/PowerShell/CMD), JavaScript `fetch`, and Python `requests` code
+- 📲 **Installable app (PWA)** — a web app manifest plus a service worker make the site installable from the browser; the installed app runs in its own window and works fully offline (the whole app is precached on first visit and silently refreshed on later loads)
 - 📦 **Zero build step** — plain HTML/CSS/JS; third-party libraries are pinned, hash-verified copies in `vendor/` (see `vendor/README.md`)
 
 ## What the demo spec covers
