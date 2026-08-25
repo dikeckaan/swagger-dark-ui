@@ -395,7 +395,8 @@ body, .sdui-header, .swagger-ui,
   border-bottom: 1px solid var(--border);
 }
 
-.sdui-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sdui-brand { display: flex; align-items: center; gap: 12px; min-width: 0; color: inherit; text-decoration: none; }
+.sdui-brand:hover .sdui-title { color: var(--accent, #58a6ff); }
 .sdui-logo { color: var(--accent); flex-shrink: 0; }
 .sdui-titles { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .sdui-title { font-weight: 700; font-size: 15px; color: var(--text-strong); white-space: nowrap; }

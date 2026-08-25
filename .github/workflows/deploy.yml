@@ -23,14 +23,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build single-file offline app (standalone.html)
-        run: node build-standalone.js
+      - name: Build the site (same build as the Cloudflare edition)
+        run: node build-cf.js --base /swagger-dark-ui --out dist-pages
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist-pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

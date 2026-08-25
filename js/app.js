@@ -311,7 +311,7 @@
     config.url = SPECS[specId].url;
     config.requestInterceptor = SPECS[specId].requestInterceptor;
     config.onComplete = function () {
-      document.title = SPECS[specId].label + ' · Swagger Dark UI';
+      document.title = SPECS[specId].label + ' · OASForge';
     };
     window.ui = SwaggerUIBundle(config);
 
@@ -334,7 +334,7 @@
     config.spec = specObject;
     window.ui = SwaggerUIBundle(config);
     if (window.SduiOpSearch) SduiOpSearch.setSpec(specObject);
-    document.title = SPECS.custom.label + ' · Swagger Dark UI';
+    document.title = SPECS.custom.label + ' · OASForge';
   }
 
   /* ----- custom spec editor ----- */

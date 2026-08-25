@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-/* Builds dist-cf/ — the OASForge edition of the site for Cloudflare Workers
-   static hosting (oasforge.dev). The GitHub Pages site is untouched; this
-   script copies the app, rebrands the visible strings to OASForge, injects
-   the SEO head (canonical, Open Graph, JSON-LD), appends a crawlable footer,
-   and generates the static content pages (/guide/, /faq/, landing pages),
-   sitemap.xml, robots.txt, 404 page and cache headers.
-   Zero dependencies; run with:  node build-cf.js  */
+/* Builds the OASForge site (landing at the root, the app at /app/, static
+   content pages, sitemap, robots, 404, cache headers, standalone build).
+   One build, two targets:
+     node build-cf.js                                        -> dist-cf/    (Cloudflare, domain root)
+     node build-cf.js --base /swagger-dark-ui --out dist-pages -> dist-pages/ (GitHub Pages, sub-path)
+   Zero dependencies. */
 'use strict';
 
 const fs = require('fs');
@@ -13,8 +12,22 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT = __dirname;
-const DIST = path.join(ROOT, 'dist-cf');
 const BASE = 'https://oasforge.dev';
+
+// One build, two targets: Cloudflare serves it at the domain root (default),
+// GitHub Pages under /swagger-dark-ui — pass  --base /swagger-dark-ui
+// --out dist-pages  there so absolute internal links get the prefix.
+// Canonical/OG/sitemap URLs always point at oasforge.dev regardless.
+const argv = process.argv.slice(2);
+const opt = (name, dflt) => {
+  const i = argv.indexOf(name);
+  return i !== -1 && argv[i + 1] !== undefined ? argv[i + 1] : dflt;
+};
+const BASE_PATH = opt('--base', '').replace(/\/+$/, '');
+const DIST = path.resolve(ROOT, opt('--out', 'dist-cf'));
+const withBase = h => BASE_PATH
+  ? h.split('href="/').join('href="' + BASE_PATH + '/').split('src="/').join('src="' + BASE_PATH + '/')
+  : h;
 const { PAGES, FAQ } = require('./site-cf/pages.js');
 
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -45,53 +58,7 @@ for (const entry of ['index.html', 'manifest.webmanifest', 'sw.js', 'LICENSE',
   fs.cpSync(path.join(ROOT, entry), path.join(DIST, 'app', entry), { recursive: true });
 }
 
-/* ── 2. Rebrand the copies to OASForge ─────────────────────────────────── */
-let index = readDist('app/index.html');
-// The mirror's cross-domain canonical would duplicate the one injected below.
-index = index
-  .replace(/^\s*<!-- The canonical home[\s\S]*?-->\n/m, '')
-  .replace(/^\s*<link rel="canonical"[^>]*\/>\n/m, '');
-index = mustReplace(index,
-  '<title>Swagger Dark UI — Full OpenAPI Showcase</title>',
-  '<title>OASForge — Free Online OpenAPI Editor, Validator &amp; Mock Server</title>',
-  'index title');
-index = mustReplace(index,
-  /<meta name="description" content="[^"]*" \/>/,
-  '<meta name="description" content="Free online OpenAPI editor with dark mode: ' +
-  'live Swagger UI preview, version-aware validation with quick fixes, in-browser ' +
-  'mock server, Postman import and Swagger 2.0 conversion. No signup — nothing ' +
-  'leaves your browser." />',
-  'index meta description');
-index = mustReplace(index,
-  '<span class="sdui-title">Swagger Dark UI</span>',
-  '<span class="sdui-title">OASForge</span>',
-  'header title');
-index = mustReplace(index,
-  '<span class="sdui-subtitle">OpenAPI 3.1 full-feature showcase</span>',
-  '<span class="sdui-subtitle">The dark OpenAPI workbench</span>',
-  'header subtitle');
-writeDist('app/index.html', index);
-
-let appjs = readDist('app/js/app.js');
-appjs = appjs.split("' · Swagger Dark UI'").join("' · OASForge'");
-if (appjs.includes('Swagger Dark UI\'')) throw new Error('app.js still sets a Swagger Dark UI title');
-writeDist('app/js/app.js', appjs);
-
-let guidejs = readDist('app/js/guide.js').split('Swagger Dark UI').join('OASForge');
-guidejs = mustReplace(guidejs,
-  'OASForge is designed, built and maintained by',
-  'OASForge — formerly <em>Swagger Dark UI</em> — is designed, built and maintained by',
-  'guide about "formerly" note');
-writeDist('app/js/guide.js', guidejs);
-
-writeDist('app/manifest.webmanifest', JSON.stringify({
-  ...JSON.parse(readDist('app/manifest.webmanifest')),
-  name: 'OASForge',
-  short_name: 'OASForge',
-  description: 'The dark OpenAPI workbench: editor, validation, mock server, import/export — fully offline.'
-}, null, 2) + '\n');
-
-/* ── 3. Single-file offline build from the rebranded copy ──────────────── */
+/* ── 2. Single-file offline build from the copied app ──────────────────── */
 execFileSync(process.execPath, [
   path.join(ROOT, 'build-standalone.js'),
   '--root', path.join(DIST, 'app'), '--out', path.join(DIST, 'standalone.html')
@@ -175,7 +142,7 @@ const FOOTER_HTML =
   '        <h2>OASForge</h2>\n' +
   '        <ul>\n' +
   '          <li><a href="/">Home</a></li>\n' +
-  '          <li><a href="/app/">Open the editor</a></li>\n' +
+  '          <li><a href="/app/?spec=custom">Open the editor</a></li>\n' +
   '          <li><a href="/guide/">User guide</a></li>\n' +
   '          <li><a href="/faq/">FAQ</a></li>\n' +
   '          <li><a href="/standalone.html">Offline single-file app</a></li>\n' +
@@ -206,7 +173,13 @@ const FOOTER_HTML =
 
 // No footer on the app page — it leaked under the editor layout; the landing
 // and content pages carry the internal links instead.
-index = readDist('app/index.html');
+let index = readDist('app/index.html');
+// In a deployed build the brand mark links to this deployment's own landing
+// page (works for both the root and the /swagger-dark-ui sub-path).
+index = mustReplace(index,
+  '<a class="sdui-brand" href="https://oasforge.dev/" title="OASForge home">',
+  '<a class="sdui-brand" href="../" title="OASForge home">',
+  'brand home link');
 index = mustReplace(index, '</title>',
   '</title>\n' +
   ogTags('OASForge Editor — The OpenAPI Workbench in Your Browser',
@@ -233,7 +206,7 @@ const NAV_LINKS =
   '<a href="/guide/">Guide</a>' +
   '<a href="/faq/">FAQ</a>' +
   '<a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a>' +
-  '<a class="cta" href="/app/">Open the editor</a>' +
+  '<a class="cta" href="/app/?spec=custom">Open the editor</a>' +
   '</nav>';
 
 const PAGE_FOOTER = FOOTER_HTML
@@ -250,7 +223,7 @@ function layout(p) {
       { '@type': 'ListItem', position: 2, name: p.h1, item: url }
     ]
   };
-  return '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<head>\n' +
+  return withBase('<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<head>\n' +
     '  <meta charset="UTF-8" />\n' +
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
     '  <title>' + esc(p.title) + '</title>\n' +
@@ -271,11 +244,11 @@ function layout(p) {
     p.body + '\n' +
     '    <div class="cta-block">\n' +
     '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
-    '      <a class="button" href="/app/">Open the OASForge editor</a>\n' +
+    '      <a class="button" href="/app/?spec=custom">Open the OASForge editor</a>\n' +
     '    </div>\n' +
     '  </main>\n' +
     PAGE_FOOTER +
-    '</body>\n</html>\n';
+    '</body>\n</html>\n');
 }
 
 for (const p of PAGES) writeDist(p.slug + '/index.html', layout(p));
@@ -363,7 +336,7 @@ const LEARN_LINKS = [
 ];
 
 const landingTitle = 'OASForge — Free Online OpenAPI Editor, Validator &amp; Mock Server';
-writeDist('index.html', '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<head>\n' +
+writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<head>\n' +
   '  <meta charset="UTF-8" />\n' +
   '  <meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
   '  <title>' + landingTitle + '</title>\n' +
@@ -372,6 +345,13 @@ writeDist('index.html', '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<h
   jsonLdTag(homeJsonLd) +
   '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
   FONT_LINKS +
+  '  <script>\n' +
+  '    // Old app links landed at this path (?spec=..., #s=... share links);\n' +
+  '    // the app moved to app/ — forward them with query and hash intact.\n' +
+  '    if (/[?&]spec=/.test(location.search) || location.hash.indexOf(\'#s=\') === 0) {\n' +
+  '      location.replace(\'app/\' + location.search + location.hash);\n' +
+  '    }\n' +
+  '  <\/script>\n' +
   '  <link rel="stylesheet" href="/assets/seo.css" />\n' +
   '</head>\n<body class="landing-bg">\n' +
   '  <header class="site-header">\n' +
@@ -387,7 +367,7 @@ writeDist('index.html', '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<h
   'Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API against a built-in mock server, ' +
   'import Postman collections and export documentation. No account, no backend — your spec never leaves the page.</p>\n' +
   '      <div class="hero-ctas">\n' +
-  '        <a class="button" href="/app/">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
+  '        <a class="button" href="/app/?spec=custom">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
   '        <a class="button ghost" href="/guide/">Read the guide</a>\n' +
   '      </div>\n' +
   '      <p class="hero-note"><code>swagger: "2.0"</code><span class="arrow">→</span>' +
@@ -447,11 +427,11 @@ writeDist('index.html', '<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<h
   '    <div class="cta-block">\n' +
   '      <h2>Ready when you are</h2>\n' +
   '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
-  '      <a class="button" href="/app/">Open the OASForge editor</a>\n' +
+  '      <a class="button" href="/app/?spec=custom">Open the OASForge editor</a>\n' +
   '    </div>\n' +
   '  </main>\n' +
   PAGE_FOOTER +
-  '</body>\n</html>\n');
+  '</body>\n</html>\n'));
 
 // Earlier deploys served the app (and registered its service worker) at the
 // root scope. This replacement worker cleans those clients up: it drops the
@@ -503,4 +483,4 @@ writeDist('_headers',
   '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n');
 
 const count = fs.readdirSync(DIST, { recursive: true }).length;
-console.log('dist-cf built:', count, 'entries,', urls.length, 'sitemap URLs');
+console.log(path.basename(DIST) + ' built (base "' + BASE_PATH + '"):', count, 'entries,', urls.length, 'sitemap URLs');

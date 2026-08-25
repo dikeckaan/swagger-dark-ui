@@ -7,7 +7,7 @@
    straight to the network. */
 'use strict';
 
-var CACHE = 'sdui-v2'; // bumped: new logo/icons
+var CACHE = 'sdui-v3'; // bumped: OASForge rebrand
 
 var SHELL = [
   './',
