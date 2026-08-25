@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Build single-file offline app (standalone.html)
+        run: node build-standalone.js
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
