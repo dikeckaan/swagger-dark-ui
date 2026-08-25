@@ -92,4 +92,14 @@ which publishes the repository root as a static site.
 
 ## License
 
-MIT
+[Elastic License 2.0](LICENSE) (ELv2) — free to use, copy, modify, distribute
+and **use commercially** (internal tools, client projects, embedding in your
+own products), with three limitations:
+
+1. you may **not offer the software itself to third parties as a hosted or
+   managed service** (e.g. selling access to this editor as a SaaS),
+2. you may not circumvent any license-key functionality,
+3. you may not remove or obscure the licensing/copyright notices.
+
+Third-party assets in [`vendor/`](vendor/README.md) keep their own upstream
+licenses (Apache-2.0 / MIT) and are not covered by ELv2.
