@@ -7,7 +7,7 @@
    straight to the network. */
 'use strict';
 
-var CACHE = 'sdui-v1';
+var CACHE = 'sdui-v2'; // bumped: new logo/icons
 
 var SHELL = [
   './',
