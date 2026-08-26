@@ -56,8 +56,10 @@ for (const f of EMBED) files[f] = read(f);
 
 const shim =
   '  <script>\n' +
-  '    // Standalone build: serve runtime-fetched files from memory so the\n' +
-  '    // app works from file:// without a web server.\n' +
+  '    // Standalone build: open straight into the editor (split view), and\n' +
+  '    // serve runtime-fetched files from memory so the app works from\n' +
+  '    // file:// without a web server.\n' +
+  '    window.SDUI_DEFAULT_SPEC = \'custom\';\n' +
   '    (function () {\n' +
   '      var FILES = ' + js(JSON.stringify(files)) + ';\n' +
   '      var real = window.fetch.bind(window);\n' +

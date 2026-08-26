@@ -29,7 +29,9 @@
       label: 'My API — YAML editor'
     }
   };
-  var DEFAULT_SPEC = 'demo';
+  // The standalone build overrides this to 'custom' so the downloaded file
+  // opens straight into the editor's split view, like the site's CTAs do.
+  var DEFAULT_SPEC = window.SDUI_DEFAULT_SPEC || 'demo';
   var THEME_KEY = 'sdui-theme';
   var SPEC_KEY = 'sdui-spec';
   var CUSTOM_SPEC_KEY = 'sdui-custom-spec'; // legacy single-doc slot, migrated below

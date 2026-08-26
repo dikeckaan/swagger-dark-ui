@@ -373,6 +373,9 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '      <div class="hero-ctas">\n' +
   '        <a class="button" href="/editor/">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
   '        <a class="button ghost" href="/guide/">Read the guide</a>\n' +
+  '        <a class="button ghost" href="/standalone.html" download="oasforge-standalone.html">' +
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:2px"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>' +
+  'Download offline app</a>\n' +
   '      </div>\n' +
   '      <p class="hero-note"><code>swagger: "2.0"</code><span class="arrow">→</span>' +
   '<code>openapi: 3.0</code><code>3.1</code><code>3.2</code> — every version, one editor</p>\n' +
