@@ -413,8 +413,10 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '  </header>\n' +
   '  <main class="content landing">\n' +
   '    <section class="hero">\n' +
-  '      <p class="eyebrow"><span class="dot g"></span>Free &amp; open source<span class="sep"></span>' +
-  '<span class="dot b"></span>No signup<span class="sep"></span><span class="dot o"></span>100% in your browser</p>\n' +
+  '      <p class="eyebrow">' +
+  '<span class="eb-item"><span class="dot g"></span>Free &amp; open source</span><span class="sep"></span>' +
+  '<span class="eb-item"><span class="dot b"></span>No signup</span><span class="sep"></span>' +
+  '<span class="eb-item"><span class="dot o"></span>100% in your browser</span></p>\n' +
   '      <h1>Forge better <span class="grad">OpenAPI</span> specs.<br>Right here, in the dark.</h1>\n' +
   '      <p class="lede">OASForge is the dark OpenAPI workbench where better specs get forged: write YAML ' +
   'beside a live Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API against a built-in ' +
