@@ -146,7 +146,7 @@ const FOOTER_HTML =
   '          <li><a href="/editor/">Editor</a></li>\n' +
   '          <li><a href="/guide/">User guide</a></li>\n' +
   '          <li><a href="/faq/">FAQ</a></li>\n' +
-  '          <li><a href="/standalone.html">Offline single-file app</a></li>\n' +
+  '          <li><a href="/standalone.html" download="oasforge-standalone.html">Offline single-file app</a></li>\n' +
   '        </ul>\n' +
   '      </div>\n' +
   '      <div>\n' +
@@ -400,7 +400,7 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '      <ul class="privacy-list">\n' +
   '        <li>No account, no telemetry, no upload — ever</li>\n' +
   '        <li>Works fully offline as an installable PWA</li>\n' +
-  '        <li><a href="/standalone.html">One HTML file</a> runs from a double-click, no web server</li>\n' +
+  '        <li><a href="/standalone.html" download="oasforge-standalone.html">One HTML file</a> runs from a double-click, no web server</li>\n' +
   '        <li>Open source under the Elastic License 2.0</li>\n' +
   '      </ul>\n' +
   '    </section>\n' +
@@ -493,6 +493,8 @@ const htmlHeaderRules = ['/', '/app/', '/editor/', '/guide/', '/faq/']
   .concat(PAGES.map(p => '/' + p.slug + '/'))
   .map(u => u + '\n  Content-Type: text/html; charset=utf-8\n').join('');
 writeDist('_headers',
+  '/standalone\n  Content-Disposition: attachment; filename="oasforge-standalone.html"\n' +
+  '/standalone.html\n  Content-Disposition: attachment; filename="oasforge-standalone.html"\n' +
   htmlHeaderRules +
   '/app/vendor/*\n  Cache-Control: public, max-age=31536000, immutable\n' +
   '/app/icons/*\n  Cache-Control: public, max-age=86400\n' +

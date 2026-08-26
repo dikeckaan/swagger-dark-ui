@@ -39,7 +39,7 @@ one-click structure insertion doing the heavy lifting.</p>
 <p>There is no backend and no account. Documents live in your browser’s local storage, snapshots
 included. That makes OASForge safe for specs you cannot paste into cloud tools — internal APIs,
 pre-release contracts, client work. It even runs from a
-<a href="/standalone.html">single offline HTML file</a> with no web server at all.</p>
+<a href="/standalone.html" download="oasforge-standalone.html">single offline HTML file</a> with no web server at all.</p>
 
 <h2>All OpenAPI versions, one editor</h2>
 <p>OASForge understands Swagger&nbsp;2.0 (with a one-click converter to OpenAPI&nbsp;3),
@@ -188,7 +188,7 @@ adds artificial latency for spinner and timeout testing.</p>
 <h2>Why in-browser matters</h2>
 <p>Nothing to install, nothing to run, nothing to secure. Spec reviews, client demos, workshops and
 interviews all work from a single browser tab — or from the
-<a href="/standalone.html">offline single-file build</a> on a machine with no internet at all.
+<a href="/standalone.html" download="oasforge-standalone.html">offline single-file build</a> on a machine with no internet at all.
 A live httpbin.org server stays selectable when you want to hit something real.</p>`
   }
 ];
