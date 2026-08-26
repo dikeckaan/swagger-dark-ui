@@ -68,9 +68,8 @@ writeDist('standalone.html',
   readDist('standalone.html').replace('</title>', '</title>\n  <meta name="robots" content="noindex" />'));
 
 /* ── 4. SEO head + crawlable footer on the app page ────────────────────── */
-const DESCRIPTION = 'Free online OpenAPI editor with dark mode: live Swagger UI preview, ' +
-  'version-aware validation with quick fixes, in-browser mock server, Postman import ' +
-  'and Swagger 2.0 conversion.';
+const DESCRIPTION = 'Free OpenAPI editor with live Swagger UI preview, one-click validation ' +
+  'fixes and an in-browser mock server. No signup — nothing leaves your browser.';
 
 const homeJsonLd = {
   '@context': 'https://schema.org',
@@ -130,6 +129,8 @@ const ogTags = (title, desc, url) =>
 const jsonLdTag = data =>
   '  <script type="application/ld+json">' + JSON.stringify(data) + '</script>\n';
 
+const TOUCH_ICON = '  <link rel="apple-touch-icon" href="/app/icons/icon-180.png" />\n';
+
 const FONT_LINKS =
   '  <link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
   '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n' +
@@ -142,10 +143,10 @@ const FOOTER_HTML =
   '        <h2>OASForge</h2>\n' +
   '        <ul>\n' +
   '          <li><a href="/">Home</a></li>\n' +
-  '          <li><a href="/app/?spec=custom">Open the editor</a></li>\n' +
+  '          <li><a href="/editor/">Editor</a></li>\n' +
   '          <li><a href="/guide/">User guide</a></li>\n' +
   '          <li><a href="/faq/">FAQ</a></li>\n' +
-  '          <li><a href="/standalone.html">Offline single-file app</a></li>\n' +
+  '          <li><a href="/standalone.html" download="oasforge-standalone.html">Offline single-file app</a></li>\n' +
   '        </ul>\n' +
   '      </div>\n' +
   '      <div>\n' +
@@ -163,7 +164,7 @@ const FOOTER_HTML =
   '        <ul>\n' +
   '          <li><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">Source on GitHub</a></li>\n' +
   '          <li><a href="https://github.com/dikeckaan/swagger-dark-ui/issues" rel="noopener">Feedback &amp; issues</a></li>\n' +
-  '          <li><a href="https://github.com/dikeckaan/swagger-dark-ui/blob/main/LICENSE" rel="noopener">License (ELv2)</a></li>\n' +
+  '          <li><a href="/license/">License (ELv2)</a></li>\n' +
   '        </ul>\n' +
   '      </div>\n' +
   '    </div>\n' +
@@ -206,7 +207,7 @@ const NAV_LINKS =
   '<a href="/guide/">Guide</a>' +
   '<a href="/faq/">FAQ</a>' +
   '<a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a>' +
-  '<a class="cta" href="/app/?spec=custom">Open the editor</a>' +
+  '<a class="cta" href="/editor/">Open the editor</a>' +
   '</nav>';
 
 const PAGE_FOOTER = FOOTER_HTML
@@ -232,6 +233,7 @@ function layout(p) {
     jsonLdTag(crumbs) +
     (p.jsonLd ? jsonLdTag(p.jsonLd) : '') +
     '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
+    TOUCH_ICON +
     FONT_LINKS +
     '  <link rel="stylesheet" href="/assets/seo.css" />\n' +
     '</head>\n<body>\n' +
@@ -244,7 +246,7 @@ function layout(p) {
     p.body + '\n' +
     '    <div class="cta-block">\n' +
     '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
-    '      <a class="button" href="/app/?spec=custom">Open the OASForge editor</a>\n' +
+    '      <a class="button" href="/editor/">Start in the editor</a>\n' +
     '    </div>\n' +
     '  </main>\n' +
     PAGE_FOOTER +
@@ -270,6 +272,56 @@ writeDist('faq/index.html', layout({
   },
   body: FAQ.map(f =>
     '<div class="faq-item"><h2>' + esc(f.q) + '</h2><p>' + esc(f.a) + '</p></div>').join('\n')
+}));
+
+/* License page — generated from the LICENSE file so the two can never drift. */
+const licParts = read('LICENSE').split(/^-{10,}$/m);
+const licBody = (licParts[1] || '').trim();
+const escLic = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const licHtml = licBody.split(/\n\n+/).map(block => {
+  const b = block.trim();
+  if (b === 'Elastic License 2.0') return '';               // the page heading covers it
+  if (b.startsWith('## ')) return '<h3>' + escLic(b.slice(3)) + '</h3>';
+  if (b.startsWith('URL:')) {
+    const url = b.replace('URL:', '').trim();
+    return '<p class="lic-url"><a href="' + url + '" rel="noopener">' + escLic(url) + '</a></p>';
+  }
+  let text = escLic(b.replace(/\s*\n\s*/g, ' '));
+  if (/^\*[^*]/.test(text) && /[^*]\*$/.test(text)) text = '<em>' + text.slice(1, -1) + '</em>';
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  return '<p>' + text + '</p>';
+}).filter(Boolean).join('\n');
+
+writeDist('license/index.html', layout({
+  slug: 'license',
+  title: 'License — Elastic License 2.0 | OASForge',
+  description: 'OASForge is source-available under the Elastic License 2.0: free to use, copy, ' +
+    'modify and use commercially, with three limitations. Plain-English summary and the full text.',
+  h1: 'License',
+  body:
+    '<p><strong>OASForge</strong> is source-available under the ' +
+    '<strong>Elastic License 2.0</strong> (ELv2). In plain English:</p>' +
+    '<div class="lic-grid">' +
+    '<div class="lic-card"><h2>You can</h2><ul class="privacy-list">' +
+    '<li>Use it freely — personal, internal and commercial work alike</li>' +
+    '<li>Copy, modify and build derivative works on top of it</li>' +
+    '<li>Distribute it and embed it in your own products</li>' +
+    '<li>Use it for client projects, with no fees ever</li>' +
+    '</ul></div>' +
+    '<div class="lic-card"><h2>You may not</h2><ul class="lic-no">' +
+    '<li>Offer OASForge itself to third parties as a hosted or managed service</li>' +
+    '<li>Remove or obscure licensing and copyright notices</li>' +
+    '<li>Circumvent license-key functionality</li>' +
+    '</ul></div>' +
+    '</div>' +
+    '<p class="lic-note">Third-party libraries in the <a href="https://github.com/dikeckaan/swagger-dark-ui/tree/main/vendor" rel="noopener">' +
+    'vendor/</a> directory keep their own upstream licenses (Apache-2.0 / MIT) and are not covered by ELv2. ' +
+    'This summary is a courtesy, not legal advice — the full text below governs.</p>' +
+    '<section class="doc">' +
+    '<div class="doc-head"><h2>Elastic License 2.0 — full text</h2>' +
+    '<span>Copyright © 2026 Kaan Dikeç</span></div>' +
+    licHtml +
+    '</section>'
 }));
 
 /* Guide page — generated from the same SECTIONS the in-app guide renders,
@@ -335,15 +387,16 @@ const LEARN_LINKS = [
   ['/faq/', 'FAQ', 'Privacy, versions, offline use and licensing, answered.']
 ];
 
-const landingTitle = 'OASForge — Free Online OpenAPI Editor, Validator &amp; Mock Server';
+const landingTitle = 'OASForge — Free OpenAPI Editor, Validator &amp; Mock Server';
 writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="dark">\n<head>\n' +
   '  <meta charset="UTF-8" />\n' +
   '  <meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
   '  <title>' + landingTitle + '</title>\n' +
-  '  <meta name="description" content="' + esc(DESCRIPTION) + ' Free and open source — no signup, nothing leaves your browser." />\n' +
+  '  <meta name="description" content="' + esc(DESCRIPTION) + '" />\n' +
   ogTags(landingTitle, DESCRIPTION, BASE + '/') +
   jsonLdTag(homeJsonLd) +
   '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
+  TOUCH_ICON +
   FONT_LINKS +
   '  <script>\n' +
   '    // Old app links landed at this path (?spec=..., #s=... share links);\n' +
@@ -363,12 +416,16 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '      <p class="eyebrow"><span class="dot g"></span>Free &amp; open source<span class="sep"></span>' +
   '<span class="dot b"></span>No signup<span class="sep"></span><span class="dot o"></span>100% in your browser</p>\n' +
   '      <h1>Forge better <span class="grad">OpenAPI</span> specs.<br>Right here, in the dark.</h1>\n' +
-  '      <p class="lede">OASForge is a complete OpenAPI workbench in a browser tab: write YAML beside a live ' +
-  'Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API against a built-in mock server, ' +
-  'import Postman collections and export documentation. No account, no backend — your spec never leaves the page.</p>\n' +
+  '      <p class="lede">OASForge is the dark OpenAPI workbench where better specs get forged: write YAML ' +
+  'beside a live Swagger&nbsp;UI preview, validate with one-click fixes, exercise your API against a built-in ' +
+  'mock server, import Postman collections and export documentation. No account, no backend — your spec ' +
+  'never leaves the page.</p>\n' +
   '      <div class="hero-ctas">\n' +
-  '        <a class="button" href="/app/?spec=custom">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
+  '        <a class="button" href="/editor/">Open the editor<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>\n' +
   '        <a class="button ghost" href="/guide/">Read the guide</a>\n' +
+  '        <a class="button ghost" href="/standalone.html" download="oasforge-standalone.html">' +
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:2px"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>' +
+  'Download offline app</a>\n' +
   '      </div>\n' +
   '      <p class="hero-note"><code>swagger: "2.0"</code><span class="arrow">→</span>' +
   '<code>openapi: 3.0</code><code>3.1</code><code>3.2</code> — every version, one editor</p>\n' +
@@ -396,7 +453,7 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '      <ul class="privacy-list">\n' +
   '        <li>No account, no telemetry, no upload — ever</li>\n' +
   '        <li>Works fully offline as an installable PWA</li>\n' +
-  '        <li><a href="/standalone.html">One HTML file</a> runs from a double-click, no web server</li>\n' +
+  '        <li><a href="/standalone.html" download="oasforge-standalone.html">One HTML file</a> runs from a double-click, no web server</li>\n' +
   '        <li>Open source under the Elastic License 2.0</li>\n' +
   '      </ul>\n' +
   '    </section>\n' +
@@ -427,11 +484,21 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '    <div class="cta-block">\n' +
   '      <h2>Ready when you are</h2>\n' +
   '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
-  '      <a class="button" href="/app/?spec=custom">Open the OASForge editor</a>\n' +
+  '      <a class="button" href="/editor/">Start in the editor</a>\n' +
   '    </div>\n' +
   '  </main>\n' +
   PAGE_FOOTER +
   '</body>\n</html>\n'));
+
+writeDist('editor/index.html', '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
+  '  <meta charset="UTF-8" />\n' +
+  '  <meta name="robots" content="noindex" />\n' +
+  '  <meta http-equiv="refresh" content="0; url=../app/?spec=custom" />\n' +
+  '  <link rel="canonical" href="' + BASE + '/app/" />\n' +
+  '  <title>OASForge Editor</title>\n' +
+  '  <script>location.replace(\'../app/?spec=custom\' + location.hash);</script>\n' +
+  '</head>\n<body style="background:#0d1117;color:#8b949e;font-family:system-ui;padding:40px">' +
+  'Opening the editor… <a href="../app/?spec=custom" style="color:#58a6ff">Continue</a></body>\n</html>\n');
 
 // Earlier deploys served the app (and registered its service worker) at the
 // root scope. This replacement worker cleans those clients up: it drops the
@@ -454,7 +521,7 @@ writeDist('sw.js',
   '});\n');
 
 /* ── 7. Crawler plumbing ───────────────────────────────────────────────── */
-const urls = ['/', '/app/', '/guide/', '/faq/'].concat(PAGES.map(p => '/' + p.slug + '/'));
+const urls = ['/', '/app/', '/guide/', '/faq/', '/license/'].concat(PAGES.map(p => '/' + p.slug + '/'));
 const today = new Date().toISOString().slice(0, 10);
 writeDist('sitemap.xml',
   '<?xml version="1.0" encoding="UTF-8"?>\n' +
@@ -475,7 +542,13 @@ writeDist('404.html', layout({
 }).replace('<head>\n', '<head>\n  <meta name="robots" content="noindex" />\n'));
 
 /* Cache and security headers (Workers static assets honors _headers). */
+const htmlHeaderRules = ['/', '/app/', '/editor/', '/guide/', '/faq/', '/license/']
+  .concat(PAGES.map(p => '/' + p.slug + '/'))
+  .map(u => u + '\n  Content-Type: text/html; charset=utf-8\n').join('');
 writeDist('_headers',
+  '/standalone\n  Content-Disposition: attachment; filename="oasforge-standalone.html"\n' +
+  '/standalone.html\n  Content-Disposition: attachment; filename="oasforge-standalone.html"\n' +
+  htmlHeaderRules +
   '/app/vendor/*\n  Cache-Control: public, max-age=31536000, immutable\n' +
   '/app/icons/*\n  Cache-Control: public, max-age=86400\n' +
   '/og-image.png\n  Cache-Control: public, max-age=86400\n' +
