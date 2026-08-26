@@ -164,7 +164,7 @@ const FOOTER_HTML =
   '        <ul>\n' +
   '          <li><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">Source on GitHub</a></li>\n' +
   '          <li><a href="https://github.com/dikeckaan/swagger-dark-ui/issues" rel="noopener">Feedback &amp; issues</a></li>\n' +
-  '          <li><a href="https://github.com/dikeckaan/swagger-dark-ui/blob/main/LICENSE" rel="noopener">License (ELv2)</a></li>\n' +
+  '          <li><a href="/license/">License (ELv2)</a></li>\n' +
   '        </ul>\n' +
   '      </div>\n' +
   '    </div>\n' +
@@ -272,6 +272,56 @@ writeDist('faq/index.html', layout({
   },
   body: FAQ.map(f =>
     '<div class="faq-item"><h2>' + esc(f.q) + '</h2><p>' + esc(f.a) + '</p></div>').join('\n')
+}));
+
+/* License page — generated from the LICENSE file so the two can never drift. */
+const licParts = read('LICENSE').split(/^-{10,}$/m);
+const licBody = (licParts[1] || '').trim();
+const escLic = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const licHtml = licBody.split(/\n\n+/).map(block => {
+  const b = block.trim();
+  if (b === 'Elastic License 2.0') return '';               // the page heading covers it
+  if (b.startsWith('## ')) return '<h3>' + escLic(b.slice(3)) + '</h3>';
+  if (b.startsWith('URL:')) {
+    const url = b.replace('URL:', '').trim();
+    return '<p class="lic-url"><a href="' + url + '" rel="noopener">' + escLic(url) + '</a></p>';
+  }
+  let text = escLic(b.replace(/\s*\n\s*/g, ' '));
+  if (/^\*[^*]/.test(text) && /[^*]\*$/.test(text)) text = '<em>' + text.slice(1, -1) + '</em>';
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  return '<p>' + text + '</p>';
+}).filter(Boolean).join('\n');
+
+writeDist('license/index.html', layout({
+  slug: 'license',
+  title: 'License — Elastic License 2.0 | OASForge',
+  description: 'OASForge is source-available under the Elastic License 2.0: free to use, copy, ' +
+    'modify and use commercially, with three limitations. Plain-English summary and the full text.',
+  h1: 'License',
+  body:
+    '<p><strong>OASForge</strong> is source-available under the ' +
+    '<strong>Elastic License 2.0</strong> (ELv2). In plain English:</p>' +
+    '<div class="lic-grid">' +
+    '<div class="lic-card"><h2>You can</h2><ul class="privacy-list">' +
+    '<li>Use it freely — personal, internal and commercial work alike</li>' +
+    '<li>Copy, modify and build derivative works on top of it</li>' +
+    '<li>Distribute it and embed it in your own products</li>' +
+    '<li>Use it for client projects, with no fees ever</li>' +
+    '</ul></div>' +
+    '<div class="lic-card"><h2>You may not</h2><ul class="lic-no">' +
+    '<li>Offer OASForge itself to third parties as a hosted or managed service</li>' +
+    '<li>Remove or obscure licensing and copyright notices</li>' +
+    '<li>Circumvent license-key functionality</li>' +
+    '</ul></div>' +
+    '</div>' +
+    '<p class="lic-note">Third-party libraries in the <a href="https://github.com/dikeckaan/swagger-dark-ui/tree/main/vendor" rel="noopener">' +
+    'vendor/</a> directory keep their own upstream licenses (Apache-2.0 / MIT) and are not covered by ELv2. ' +
+    'This summary is a courtesy, not legal advice — the full text below governs.</p>' +
+    '<section class="doc">' +
+    '<div class="doc-head"><h2>Elastic License 2.0 — full text</h2>' +
+    '<span>Copyright © 2026 Kaan Dikeç</span></div>' +
+    licHtml +
+    '</section>'
 }));
 
 /* Guide page — generated from the same SECTIONS the in-app guide renders,
@@ -471,7 +521,7 @@ writeDist('sw.js',
   '});\n');
 
 /* ── 7. Crawler plumbing ───────────────────────────────────────────────── */
-const urls = ['/', '/app/', '/guide/', '/faq/'].concat(PAGES.map(p => '/' + p.slug + '/'));
+const urls = ['/', '/app/', '/guide/', '/faq/', '/license/'].concat(PAGES.map(p => '/' + p.slug + '/'));
 const today = new Date().toISOString().slice(0, 10);
 writeDist('sitemap.xml',
   '<?xml version="1.0" encoding="UTF-8"?>\n' +
@@ -492,7 +542,7 @@ writeDist('404.html', layout({
 }).replace('<head>\n', '<head>\n  <meta name="robots" content="noindex" />\n'));
 
 /* Cache and security headers (Workers static assets honors _headers). */
-const htmlHeaderRules = ['/', '/app/', '/editor/', '/guide/', '/faq/']
+const htmlHeaderRules = ['/', '/app/', '/editor/', '/guide/', '/faq/', '/license/']
   .concat(PAGES.map(p => '/' + p.slug + '/'))
   .map(u => u + '\n  Content-Type: text/html; charset=utf-8\n').join('');
 writeDist('_headers',
