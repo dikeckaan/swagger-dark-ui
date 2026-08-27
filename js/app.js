@@ -147,6 +147,45 @@
     return id;
   }
 
+  /* ----- Postman import sidecar -----
+     The original collection of a Postman import, kept per document so the
+     exporter can offer merging spec edits back into it (scripts, settings
+     and other Postman-only data survive the round-trip). */
+
+  var POSTMAN_SRC_KEY = 'sdui-postman-src';
+
+  function loadPostmanSources() {
+    try {
+      var m = JSON.parse(storageGet(POSTMAN_SRC_KEY) || '{}');
+      return m && typeof m === 'object' ? m : {};
+    } catch (e) { return {}; }
+  }
+
+  function setPostmanSource(docId, collection) {
+    if (!docId || !collection) return;
+    var json;
+    try { json = JSON.stringify(collection); } catch (e) { return; }
+    if (json.length > 2000000) return; // huge collection — skip, plain export still works
+    var map = loadPostmanSources();
+    Object.keys(map).forEach(function (id) { if (!docs[id]) delete map[id]; });
+    map[docId] = json;
+    storageSet(POSTMAN_SRC_KEY, JSON.stringify(map));
+  }
+
+  function getPostmanSource(docId) {
+    var json = loadPostmanSources()[docId];
+    if (!json) return null;
+    try { return JSON.parse(json); } catch (e) { return null; }
+  }
+
+  function dropPostmanSource(docId) {
+    var map = loadPostmanSources();
+    if (map[docId]) {
+      delete map[docId];
+      storageSet(POSTMAN_SRC_KEY, JSON.stringify(map));
+    }
+  }
+
   /* ----- header height (the bar wraps to two rows on small screens) ----- */
 
   var headerEl = document.querySelector('.sdui-header');
@@ -487,6 +526,7 @@
         try {
           var converted = SduiPostman.tryConvert(text);
           if (converted) {
+            setPostmanSource(activeDocId(), converted.collection);
             editor.setValue(converted.yaml); // change event re-renders
             setEditorStatus('ok', 'Postman collection detected — converted to OpenAPI 3');
             return;
@@ -745,6 +785,7 @@
         button: document.getElementById('editor-export'),
         menu: document.getElementById('editor-export-menu'),
         getText: function () { return editor.getValue(); },
+        getPostmanSource: function () { return getPostmanSource(activeDocId()); },
         setStatus: setEditorStatus
       });
     }
@@ -951,6 +992,7 @@
     var deleteArmedUntil = 0;
     deleteBtn.addEventListener('click', function () {
       if (Date.now() < deleteArmedUntil) {
+        dropPostmanSource(activeDocId());
         delete docs[activeDocId()];
         if (!Object.keys(docs).length) addDoc('My API', CUSTOM_TEMPLATE);
         saveDocs();
@@ -1009,7 +1051,8 @@
       return;
     }
     if (converted) {
-      addDoc(converted.name, converted.yaml);
+      var importedId = addDoc(converted.name, converted.yaml);
+      setPostmanSource(importedId, converted.collection);
       refreshDocSelect();
       switchDoc(activeDocId());
       setEditorStatus('ok', 'Postman collection converted to OpenAPI and saved as "' + converted.name + '"');
@@ -1212,7 +1255,7 @@
     // Shared Postman collections get converted on arrival, like file imports.
     var sharedConv = window.SduiPostman && SduiPostman.tryConvert(sharedText);
     if (sharedConv) {
-      addDoc(sharedConv.name, sharedConv.yaml);
+      setPostmanSource(addDoc(sharedConv.name, sharedConv.yaml), sharedConv.collection);
     } else {
       addDoc('Shared ' + new Date().toISOString().slice(0, 10), sharedText);
     }

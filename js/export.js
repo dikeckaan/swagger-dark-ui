@@ -1,14 +1,30 @@
 /* Swagger Dark UI — exporters for the YAML editor.
    "Export" dropdown: the current OpenAPI 3 document as a Postman
-   Collection v2.1 (folders per tag, auth mapping, example bodies), or as a
-   standalone single-file HTML documentation page with Swagger UI inlined
-   from the vendored assets — it opens from disk, no server or network. */
+   Collection v2.1 (folders per tag, auth mapping, example bodies, saved
+   responses rebuilt from response examples), or as a standalone single-file
+   HTML documentation page with Swagger UI inlined from the vendored assets.
+   Documents that were imported from a Postman collection can alternatively
+   be MERGED back into the original collection: spec edits are applied to
+   the matching requests while Postman-only data the spec cannot represent
+   (scripts, settings, extra variables) is preserved. */
 (function () {
   'use strict';
 
   var METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
 
+  var STATUS_TEXT = {
+    200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content',
+    301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
+    400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found',
+    405: 'Method Not Allowed', 409: 'Conflict', 410: 'Gone', 415: 'Unsupported Media Type',
+    422: 'Unprocessable Entity', 429: 'Too Many Requests',
+    500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable',
+    504: 'Gateway Timeout'
+  };
+
   function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+
+  function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
   function deref(doc, node) {
     if (isObj(node) && typeof node.$ref === 'string' && node.$ref.slice(0, 2) === '#/') {
@@ -32,13 +48,16 @@
 
   /* ----- Postman Collection v2.1 ----- */
 
-  function postmanAuth(doc) {
-    var req = Array.isArray(doc.security) && doc.security.length ? doc.security[0] : null;
-    var schemes = doc.components && doc.components.securitySchemes;
-    if (!req || !isObj(schemes)) return null;
-    var name = Object.keys(req)[0];
-    var scheme = schemes[name];
+  /* Maps an OpenAPI security requirement list (doc.security or op.security)
+     to a Postman auth block. An explicit empty list means "no auth". */
+  function authFor(doc, security) {
+    if (!Array.isArray(security)) return null;
+    if (!security.length) return { type: 'noauth' };
+    var schemes = (doc.components && doc.components.securitySchemes) || {};
+    var name = Object.keys(security[0] || {})[0];
+    var scheme = name && deref(doc, schemes[name]);
     if (!isObj(scheme)) return null;
+
     if (scheme.type === 'http' && scheme.scheme === 'basic') {
       return { type: 'basic', basic: [] };
     }
@@ -54,6 +73,24 @@
           { key: 'in', value: scheme.in === 'query' ? 'query' : 'header', type: 'string' }
         ]
       };
+    }
+    if (scheme.type === 'oauth2' && isObj(scheme.flows)) {
+      var flows = scheme.flows;
+      var flowName = Object.keys(flows)[0];
+      var flow = flows[flowName] || {};
+      var GRANTS = {
+        authorizationCode: 'authorization_code',
+        clientCredentials: 'client_credentials',
+        password: 'password_credentials',
+        implicit: 'implicit'
+      };
+      var fields = [{ key: 'grant_type', value: GRANTS[flowName] || 'authorization_code', type: 'string' }];
+      if (flow.tokenUrl) fields.push({ key: 'accessTokenUrl', value: flow.tokenUrl, type: 'string' });
+      if (flow.authorizationUrl) fields.push({ key: 'authUrl', value: flow.authorizationUrl, type: 'string' });
+      var reqScopes = Array.isArray((security[0] || {})[name]) && (security[0] || {})[name].length
+        ? (security[0] || {})[name] : Object.keys(flow.scopes || {});
+      if (reqScopes.length) fields.push({ key: 'scope', value: reqScopes.join(' '), type: 'string' });
+      return { type: 'oauth2', oauth2: fields };
     }
     return null;
   }
@@ -97,6 +134,61 @@
       raw: example === undefined ? '{}' : JSON.stringify(example, null, 2),
       options: { raw: { language: jsonMime ? 'json' : 'text' } }
     };
+  }
+
+  function bodyString(value) {
+    return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  }
+
+  /* Rebuilds Postman saved responses from the operation's response examples
+     (single `example` values and named `examples` alike), so a collection
+     that was imported with saved responses round-trips with them intact. */
+  function savedResponses(doc, op, request) {
+    var out = [];
+    var responses = isObj(op.responses) ? op.responses : {};
+    Object.keys(responses).forEach(function (codeKey) {
+      var resp = deref(doc, responses[codeKey]);
+      if (!isObj(resp)) return;
+      var code = /^\d+$/.test(codeKey) ? parseInt(codeKey, 10) : 200;
+      var status = (resp.description && resp.description !== STATUS_TEXT[code] ? resp.description : null)
+        || STATUS_TEXT[code] || 'OK';
+      var headers = [];
+      Object.keys(resp.headers || {}).forEach(function (h) {
+        var hd = deref(doc, resp.headers[h]) || {};
+        var v = hd.example !== undefined ? hd.example
+          : (hd.schema && hd.schema.example !== undefined ? hd.schema.example : '');
+        headers.push({ key: h, value: String(v) });
+      });
+      Object.keys(resp.content || {}).forEach(function (mime) {
+        var mt = resp.content[mime] || {};
+        var lang = /json/.test(mime) ? 'json' : (/xml|html/.test(mime) ? 'xml' : 'text');
+        var mimeHeader = [{ key: 'Content-Type', value: mime }].concat(headers);
+        if (isObj(mt.examples)) {
+          Object.keys(mt.examples).forEach(function (exName) {
+            var ex = deref(doc, mt.examples[exName]) || {};
+            if (ex.value === undefined) return;
+            out.push({
+              name: ex.summary || exName,
+              originalRequest: clone(request),
+              status: String(status), code: code,
+              _postman_previewlanguage: lang,
+              header: mimeHeader, cookie: [],
+              body: bodyString(ex.value)
+            });
+          });
+        } else if (mt.example !== undefined) {
+          out.push({
+            name: codeKey + ' ' + (STATUS_TEXT[code] || ''),
+            originalRequest: clone(request),
+            status: String(status), code: code,
+            _postman_previewlanguage: lang,
+            header: mimeHeader, cookie: [],
+            body: bodyString(mt.example)
+          });
+        }
+      });
+    });
+    return out;
   }
 
   function postmanRequest(doc, pathName, method, op, sharedParams) {
@@ -144,10 +236,16 @@
         request.header = headers.concat([{ key: 'Content-Type', value: 'application/json' }]);
       }
     }
-    return {
+    var auth = authFor(doc, op.security);
+    if (auth) request.auth = auth;
+
+    var item = {
       name: op.summary || op.operationId || method.toUpperCase() + ' ' + pathName,
       request: request
     };
+    var responses = savedResponses(doc, op, request);
+    if (responses.length) item.response = responses;
+    return item;
   }
 
   function toPostman(doc) {
@@ -178,6 +276,13 @@
       return { name: tag, item: folders[tag] };
     }).concat(rootItems);
 
+    var variables = [{ key: 'baseUrl', value: server, type: 'string' }];
+    var serverVars = (Array.isArray(doc.servers) && doc.servers[0] && doc.servers[0].variables) || {};
+    Object.keys(serverVars).forEach(function (k) {
+      var v = serverVars[k] || {};
+      variables.push({ key: k, value: v.default !== undefined ? String(v.default) : '', type: 'string' });
+    });
+
     var collection = {
       info: {
         name: (doc.info && doc.info.title) || 'API',
@@ -185,11 +290,118 @@
         schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
       },
       item: items,
-      variable: [{ key: 'baseUrl', value: server, type: 'string' }]
+      variable: variables
     };
-    var auth = postmanAuth(doc);
+    var auth = authFor(doc, doc.security);
     if (auth) collection.auth = auth;
     return collection;
+  }
+
+  /* ----- merge back into an imported Postman collection ----- */
+
+  /* Match key for a request: METHOD + path with template segments unified,
+     ignoring the host part ({{baseUrl}} etc.). */
+  function requestKey(method, urlish) {
+    var path = '';
+    if (typeof urlish === 'string') {
+      path = urlish.replace(/^[a-z]+:\/\/[^/]*/i, '').replace(/^\{\{[^}]+\}\}/, '').split('?')[0];
+    } else if (isObj(urlish) && Array.isArray(urlish.path)) {
+      path = '/' + urlish.path.join('/');
+    }
+    var norm = path.split('/').filter(Boolean).map(function (seg) {
+      if (/^:/.test(seg) || /^\{\{?[^}]+\}?\}$/.test(seg)) return '{}';
+      return seg;
+    }).join('/');
+    return String(method || '').toUpperCase() + ' /' + norm;
+  }
+
+  function indexGenerated(collection) {
+    var map = {};
+    (function walk(items, tag) {
+      (items || []).forEach(function (it) {
+        if (it.item) { walk(it.item, it.name); return; }
+        if (!it.request) return;
+        map[requestKey(it.request.method, it.request.url)] = { item: it, tag: tag || null };
+      });
+    })(collection.item, null);
+    return map;
+  }
+
+  /* Applies the current document's edits onto a clone of the ORIGINAL
+     collection: matched requests get their spec-representable fields
+     replaced, while Postman-only data (scripts/events, settings, saved
+     responses with their full transport detail, unmatched requests and
+     extra variables) is left exactly as the user had it. */
+  function mergeIntoCollection(doc, original) {
+    var generated = toPostman(doc);
+    var genIndex = indexGenerated(generated);
+    var merged = clone(original);
+    var matchedKeys = {};
+
+    (function walk(items) {
+      (items || []).forEach(function (it) {
+        if (it.item) { walk(it.item); return; }
+        if (!it.request) return;
+        var key = requestKey(it.request.method, it.request.url);
+        var gen = genIndex[key];
+        if (!gen) return; // request no longer in the spec — keep it untouched
+        matchedKeys[key] = true;
+        var g = gen.item;
+        it.name = g.name;
+        var keepAuth = it.request.auth;
+        var keepResponses = it.response;
+        it.request = clone(g.request);
+        if (!it.request.auth && keepAuth) it.request.auth = keepAuth;
+        // Original saved responses carry transport detail (headers, cookies,
+        // timings) the spec cannot express — prefer them when present.
+        if (Array.isArray(keepResponses) && keepResponses.length) {
+          it.response = keepResponses;
+        } else if (Array.isArray(g.response) && g.response.length) {
+          it.response = clone(g.response);
+        }
+      });
+    })(merged.item);
+
+    // Endpoints added to the spec after the import land in a matching tag
+    // folder when one exists, else in a dedicated folder.
+    var additions = [];
+    Object.keys(genIndex).forEach(function (key) {
+      if (!matchedKeys[key]) additions.push(genIndex[key]);
+    });
+    if (additions.length) {
+      var foldersByName = {};
+      (merged.item || []).forEach(function (it) {
+        if (it.item) foldersByName[it.name] = it;
+      });
+      var newFolder = null;
+      additions.forEach(function (add) {
+        var target = add.tag && foldersByName[add.tag];
+        if (target) {
+          target.item.push(clone(add.item));
+        } else {
+          if (!newFolder) {
+            newFolder = { name: 'Added from spec', item: [] };
+            merged.item = merged.item || [];
+            merged.item.push(newFolder);
+          }
+          newFolder.item.push(clone(add.item));
+        }
+      });
+    }
+
+    // Spec-representable collection fields follow the document.
+    merged.info = merged.info || {};
+    merged.info.name = generated.info.name;
+    if (generated.info.description !== undefined) merged.info.description = generated.info.description;
+    if (generated.auth) merged.auth = generated.auth;
+
+    var haveVars = {};
+    merged.variable = merged.variable || [];
+    merged.variable.forEach(function (v) { haveVars[v.key] = true; });
+    (generated.variable || []).forEach(function (v) {
+      if (!haveVars[v.key]) merged.variable.push(v);
+    });
+    return merged;
   }
 
   /* ----- standalone HTML documentation ----- */
@@ -246,14 +458,58 @@
     URL.revokeObjectURL(link.href);
   }
 
+  /* Two-option dialog shown when the document came from a Postman import:
+     rebuild from the spec alone, or merge the edits into the original. */
+  function chooseExportMode(onChoice) {
+    var overlay = document.createElement('div');
+    overlay.className = 'sdui-modal-overlay';
+    overlay.id = 'export-choice-overlay';
+    overlay.innerHTML =
+      '<div class="sdui-modal sdui-export-choice" role="dialog" aria-modal="true" aria-label="Export Postman collection">' +
+      '  <div class="sdui-modal-head">' +
+      '    <div class="g-title">Export Postman collection</div>' +
+      '    <button type="button" class="sdui-tool-btn" data-choice="cancel">Cancel</button>' +
+      '  </div>' +
+      '  <div class="sdui-export-choice-body">' +
+      '    <p>This document was imported from a Postman collection. How should the export be built?</p>' +
+      '    <button type="button" class="sdui-export-option" data-choice="merge">' +
+      '      <strong>Merge into my collection</strong>' +
+      '      <span>Applies your spec changes to the original collection — scripts, settings, saved responses and extra variables are kept.</span>' +
+      '    </button>' +
+      '    <button type="button" class="sdui-export-option" data-choice="fresh">' +
+      '      <strong>Generate from the spec only</strong>' +
+      '      <span>A clean collection rebuilt purely from the OpenAPI document, ignoring the original import.</span>' +
+      '    </button>' +
+      '  </div>' +
+      '</div>';
+    function close() { overlay.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) { close(); return; }
+      var btn = e.target.closest('[data-choice]');
+      if (!btn) return;
+      close();
+      if (btn.dataset.choice !== 'cancel') onChoice(btn.dataset.choice);
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+  }
+
   function init(opts) {
     var button = opts.button;
     var menu = opts.menu;
+    var getPostmanSource = opts.getPostmanSource || function () { return null; };
 
     function currentDoc() {
       var doc = jsyaml.load(opts.getText());
       if (!doc || typeof doc !== 'object') throw new Error('the document is empty');
       return doc;
+    }
+
+    function downloadCollection(doc, collection, note) {
+      download(slug(doc) + '.postman_collection.json', 'application/json',
+        JSON.stringify(collection, null, 2));
+      opts.setStatus('ok', note);
     }
 
     var ACTIONS = [
@@ -262,10 +518,26 @@
         run: function () {
           var doc = currentDoc();
           if (doc.swagger) throw new Error('convert the document to OpenAPI 3 first');
-          var collection = toPostman(doc);
-          download(slug(doc) + '.postman_collection.json', 'application/json',
-            JSON.stringify(collection, null, 2));
-          return 'Postman collection downloaded — import it via File → Import in Postman';
+          var source = getPostmanSource();
+          if (source) {
+            chooseExportMode(function (choice) {
+              try {
+                if (choice === 'merge') {
+                  downloadCollection(doc, mergeIntoCollection(doc, source),
+                    'Merged collection downloaded — your spec edits applied, Postman-only data kept');
+                } else {
+                  downloadCollection(doc, toPostman(doc),
+                    'Postman collection downloaded — rebuilt from the spec');
+                }
+              } catch (err) {
+                opts.setStatus('err', 'Export failed: ' + err.message);
+              }
+            });
+            return null; // status set after the dialog choice
+          }
+          downloadCollection(doc, toPostman(doc),
+            'Postman collection downloaded — import it via File → Import in Postman');
+          return null;
         }
       },
       {
@@ -295,7 +567,7 @@
         menu.hidden = true;
         try {
           Promise.resolve(action.run()).then(function (msg) {
-            opts.setStatus('ok', msg);
+            if (msg) opts.setStatus('ok', msg);
           }).catch(function (err) {
             opts.setStatus('err', 'Export failed: ' + err.message);
           });
@@ -318,5 +590,10 @@
     });
   }
 
-  window.SduiExport = { init: init, toPostman: toPostman, standaloneHtml: standaloneHtml };
+  window.SduiExport = {
+    init: init,
+    toPostman: toPostman,
+    mergeIntoCollection: mergeIntoCollection,
+    standaloneHtml: standaloneHtml
+  };
 })();

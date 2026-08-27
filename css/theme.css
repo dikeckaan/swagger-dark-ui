@@ -1727,3 +1727,24 @@ li.CodeMirror-hint-active { background: var(--accent); color: #fff; }
 
   #swagger-ui { padding: 4px 2px 60px; }
 }
+
+/* ----- Postman export choice dialog ----- */
+.sdui-export-choice { width: min(520px, 100%); }
+.sdui-export-choice-body { padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.sdui-export-choice-body p { margin: 0 0 4px; font-size: 13px; color: var(--text-muted); }
+.sdui-export-option {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+}
+.sdui-export-option:hover { border-color: var(--accent); }
+.sdui-export-option strong { font-size: 13.5px; color: var(--text-strong); }
+.sdui-export-option span { font-size: 12px; line-height: 1.5; color: var(--text-muted); }

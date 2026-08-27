@@ -390,7 +390,10 @@
       var oas = convert(obj);
       return {
         name: oas.info.title,
-        yaml: jsyaml.dump(oas, { lineWidth: 110, noRefs: true, skipInvalid: true })
+        yaml: jsyaml.dump(oas, { lineWidth: 110, noRefs: true, skipInvalid: true }),
+        // The original collection, for the merge-back export path: it holds
+        // Postman-only data (scripts, settings) OpenAPI cannot represent.
+        collection: obj
       };
     }
   };
