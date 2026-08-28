@@ -7,6 +7,7 @@
 const PAGES = [
   {
     slug: 'openapi-editor',
+    related: ['openapi-validator', 'openapi-example', 'swagger-ui-dark-theme'],
     title: 'Free Online OpenAPI Editor with Dark Mode — OASForge',
     description:
       'Write OpenAPI 3.0, 3.1 and 3.2 specs in a free online editor with live Swagger UI preview, ' +
@@ -48,6 +49,7 @@ valid in 3.1 but unknown in 3.0 is explained rather than just flagged.</p>`
   },
   {
     slug: 'openapi-validator',
+    related: ['openapi-editor', 'openapi-3-1-vs-3-0', 'swagger-2-to-openapi-3'],
     title: 'OpenAPI Validator Online — Version-Aware Linting with Quick Fixes | OASForge',
     description:
       'Validate OpenAPI and Swagger specs in the browser: version-aware errors for 2.0, 3.0, 3.1 ' +
@@ -84,10 +86,11 @@ with an informational note instead of a wall of false errors.</p>`
   },
   {
     slug: 'swagger-editor-alternative',
+    related: ['swagger-ui-dark-theme', 'openapi-mock-server', 'openapi-editor'],
     title: 'Swagger Editor Alternative — Offline, Dark, with a Mock Server | OASForge',
     description:
       'Looking for a Swagger Editor alternative? OASForge adds a dark theme, an in-browser mock ' +
-      'server, Postman import, quick fixes and full offline support — free and open source.',
+      'server, Postman import, quick fixes and full offline support — free, with public source code.',
     h1: 'A modern alternative to Swagger Editor',
     body: `
 <p>Swagger Editor defined the category. OASForge keeps what made it great — code on the left,
@@ -122,6 +125,7 @@ first. For writing, validating, mocking and sharing a spec, it does more — wit
   },
   {
     slug: 'postman-to-openapi',
+    related: ['swagger-2-to-openapi-3', 'openapi-editor', 'openapi-mock-server'],
     title: 'Convert Postman Collection to OpenAPI 3 Online — Free | OASForge',
     description:
       'Drop a Postman Collection (v2 / v2.1) export into OASForge and get clean OpenAPI 3.0: auth ' +
@@ -159,6 +163,7 @@ and tokens — is never uploaded anywhere.</p>`
   },
   {
     slug: 'openapi-mock-server',
+    related: ['openapi-editor', 'openapi-example', 'swagger-editor-alternative'],
     title: 'In-Browser OpenAPI Mock Server — Try It Out Offline | OASForge',
     description:
       'OASForge ships a stateful mock server that runs inside the browser: POST creates records, ' +
@@ -190,7 +195,207 @@ adds artificial latency for spinner and timeout testing.</p>
 interviews all work from a single browser tab — or from the
 <a href="/standalone.html" download="oasforge-standalone.html">offline single-file build</a> on a machine with no internet at all.
 A live httpbin.org server stays selectable when you want to hit something real.</p>`
-  }
+  },
+  {
+    slug: 'swagger-ui-dark-theme',
+    title: 'Swagger UI Dark Theme — Ready-Made Dark Mode for API Docs | OASForge',
+    description:
+      'A polished dark theme for Swagger UI with four color palettes, built as CSS design tokens ' +
+      'over Swagger UI 5. Use it live in OASForge or take the open-source stylesheet.',
+    h1: 'A dark theme Swagger UI never shipped',
+    date: '2026-08-27',
+    related: ['swagger-editor-alternative', 'openapi-editor', 'openapi-example'],
+    body: `
+<p>Swagger UI is the de-facto renderer for OpenAPI documentation — and it still has no official
+dark mode. OASForge started life as exactly that: a carefully engineered <strong>dark theme for
+Swagger&nbsp;UI&nbsp;5</strong>, and grew into a full workbench around it.</p>
+
+<h2>Not a color-inverted hack</h2>
+<p>Most dark Swagger themes invert colors or slap a filter on the page, which breaks method badges,
+code samples and syntax highlighting. OASForge's theme is built as a
+<strong>token-based stylesheet</strong>: every color in Swagger UI's rendering — operation blocks,
+schema trees, models, code snippets, "Try it out" forms — maps to a design token, so the dark
+palette stays readable and the method colors (GET, POST, DELETE…) keep their meaning.</p>
+
+<h2>Four palettes, light mode included</h2>
+<p>The default dark palette follows the GitHub-dark family; <strong>Nord</strong>,
+<strong>Dracula</strong> and <strong>Catppuccin</strong> palettes ship alongside it, plus a light
+mode toggle. Your choice persists in the browser.</p>
+
+<h2>Use it two ways</h2>
+<ul>
+  <li><strong>In OASForge:</strong> paste your OpenAPI description into the editor and the preview
+      renders in the dark theme immediately — nothing to install.</li>
+  <li><strong>In your own docs:</strong> the theme is a plain CSS file
+      (<code>css/theme.css</code>) in the
+      <a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">source repository</a>,
+      written for Swagger UI 5.x and source-available under ELv2 — free to use in your products.</li>
+</ul>
+<p>The exported standalone HTML docs use the same styling, so documentation you hand to a customer
+looks the way it does in the editor.</p>`
+  },
+  {
+    slug: 'openapi-example',
+    title: 'OpenAPI Example — Minimal Spec and a Full-Feature 3.1 Demo | OASForge',
+    description:
+      'A minimal OpenAPI example you can copy, plus a full-feature OpenAPI 3.1 demo spec covering ' +
+      'auth, callbacks, webhooks, oneOf/allOf and more — all editable live in the browser.',
+    h1: 'OpenAPI examples: a minimal spec and a full-feature demo',
+    date: '2026-08-27',
+    related: ['openapi-editor', 'openapi-3-1-vs-3-0', 'openapi-validator'],
+    body: `
+<p>The fastest way to learn OpenAPI is to read working documents. Here is the smallest useful
+one — a single <code>GET</code> endpoint returning JSON:</p>
+
+<pre><code>openapi: 3.0.3
+info:
+  title: My API
+  version: 1.0.0
+servers:
+  - url: https://api.example.com/v1
+paths:
+  /hello:
+    get:
+      summary: Say hello
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A friendly greeting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string</code></pre>
+
+<p>Paste it into the <a href="/editor/">OASForge editor</a> and it renders as interactive
+documentation instantly — "Try it out" even works, answered by the built-in mock server.</p>
+
+<h2>A full-feature OpenAPI 3.1 example</h2>
+<p>For everything past hello-world, OASForge ships a deliberately exhaustive demo: a fictional
+e-commerce API written to exercise every construct Swagger UI can render:</p>
+<ul>
+  <li>All HTTP methods, deprecated operations, external docs</li>
+  <li>Path, query, header and cookie parameters with styles (<code>deepObject</code>, <code>pipeDelimited</code>)</li>
+  <li>JSON bodies with named examples, form-urlencoded, multipart file upload, XML, plain text</li>
+  <li><code>oneOf</code> / <code>anyOf</code> / <code>allOf</code> with discriminators, recursive schemas, <code>readOnly</code>/<code>writeOnly</code></li>
+  <li>Callbacks and OpenAPI 3.1 webhooks</li>
+  <li>API key, HTTP Basic, Bearer JWT, OAuth 2.0 flows and OpenID Connect security schemes</li>
+</ul>
+<p>Open the <a href="/app/">demo in the preview</a>, then use <em>Edit a copy</em> to turn it into
+your own editable document — the ready-made spec doubles as a starting template.</p>`
+  },
+  {
+    slug: 'openapi-3-1-vs-3-0',
+    title: 'OpenAPI 3.1 vs 3.0 — What Changed and How to Migrate | OASForge',
+    description:
+      'The practical differences between OpenAPI 3.0 and 3.1: JSON Schema 2020-12 alignment, the ' +
+      'end of nullable, numeric exclusiveMinimum, webhooks — and how a version-aware validator helps.',
+    h1: 'OpenAPI 3.1 vs 3.0: what actually changed',
+    date: '2026-08-27',
+    related: ['openapi-validator', 'openapi-3-2', 'openapi-example'],
+    body: `
+<p>OpenAPI 3.1 looks like a minor bump but is the biggest schema change in the specification's
+history: the Schema Object became a <strong>full JSON Schema 2020-12 vocabulary</strong> instead of
+a modified subset. The differences that bite in practice:</p>
+
+<h2>The changes that matter</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Topic</th><th>OpenAPI 3.0</th><th>OpenAPI 3.1</th></tr></thead>
+  <tbody>
+    <tr><td>Nullable values</td><td><code>type: string</code> + <code>nullable: true</code></td><td><code>type: [string, "null"]</code> — <code>nullable</code> is gone</td></tr>
+    <tr><td>Exclusive bounds</td><td><code>exclusiveMinimum: true</code> (boolean modifier)</td><td><code>exclusiveMinimum: 5</code> (a number itself)</td></tr>
+    <tr><td>JSON Schema keywords</td><td>Subset (<code>const</code>, <code>if/then</code>… unavailable)</td><td>Full 2020-12: <code>const</code>, <code>prefixItems</code>, <code>patternProperties</code>, conditionals</td></tr>
+    <tr><td>Webhooks</td><td>—</td><td>Top-level <code>webhooks</code> for calls your API makes out</td></tr>
+    <tr><td>Root requirements</td><td><code>paths</code> required</td><td>Any of <code>paths</code>, <code>components</code> or <code>webhooks</code> suffices</td></tr>
+    <tr><td>License</td><td><code>url</code></td><td><code>identifier</code> (SPDX) as an alternative</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Migration gotchas</h2>
+<p>Tools that "support 3.1" sometimes just relax validation. The classic mistakes when bumping the
+version line: leaving <code>nullable</code> in place (ignored in 3.1), keeping boolean
+<code>exclusiveMinimum</code>, and assuming every renderer understands 2020-12 keywords.</p>
+<p>This is exactly what a version-aware validator is for: OASForge lints the document against the
+rules of its <em>declared</em> version — <code>nullable</code> in a 3.1 file gets a warning with
+the type-array replacement, a 3.1-only keyword in a 3.0 file offers a one-click version bump, and
+the exclusive-bounds shape is checked both ways. Try it by pasting your spec into the
+<a href="/editor/">editor</a>.</p>`
+  },
+  {
+    slug: 'openapi-3-2',
+    title: 'OpenAPI 3.2 — New Features and Editor Support | OASForge',
+    description:
+      'OpenAPI 3.2 highlights — $self, the QUERY HTTP method, additionalOperations — and an online ' +
+      'editor that validates 3.2 documents today.',
+    h1: 'OpenAPI 3.2: the headline changes, supported today',
+    date: '2026-08-27',
+    related: ['openapi-3-1-vs-3-0', 'openapi-validator', 'openapi-editor'],
+    body: `
+<p>OpenAPI 3.2 continues the 3.1 line — same JSON Schema 2020-12 foundation — and adds
+long-requested expressiveness. The changes you will actually meet in documents:</p>
+
+<h2>What 3.2 adds</h2>
+<ul>
+  <li><strong><code>$self</code></strong> — a root-level identity URI for the document, making
+      cross-document references unambiguous.</li>
+  <li><strong>The <code>query</code> HTTP method</strong> — first-class support for the emerging
+      QUERY method (safe, idempotent requests with a body), next to <code>get</code>,
+      <code>post</code> and friends on a Path Item.</li>
+  <li><strong><code>additionalOperations</code></strong> — describe operations for HTTP methods
+      beyond the fixed set, keyed by method name.</li>
+</ul>
+<p>Alongside these come further refinements to tags and media type handling — see the
+<a href="https://spec.openapis.org/oas/latest.html" rel="noopener">official specification</a> for
+the complete list.</p>
+
+<h2>Editing 3.2 in the browser</h2>
+<p>Most online editors still reject <code>openapi: 3.2.0</code> outright. OASForge recognizes it:
+the validator accepts <code>$self</code>, <code>query</code> operations and
+<code>additionalOperations</code> where they belong, flags them as errors in 3.0/3.1 documents
+(with a one-click version bump), and treats unknown future minor versions permissively with an
+informational note instead of a wall of false errors. Paste a 3.2 document into the
+<a href="/editor/">editor</a> and see.</p>`
+  },
+  {
+    slug: 'swagger-2-to-openapi-3',
+    title: 'Convert Swagger 2.0 to OpenAPI 3 Online — Free, In-Browser | OASForge',
+    description:
+      'Paste a Swagger 2.0 document and convert it to OpenAPI 3 in one click: servers, requestBody, ' +
+      'response content, components and $refs all rewritten — entirely in your browser.',
+    h1: 'Swagger 2.0 → OpenAPI 3, in one click',
+    date: '2026-08-27',
+    related: ['postman-to-openapi', 'openapi-validator', 'openapi-3-1-vs-3-0'],
+    body: `
+<p>Plenty of production APIs still describe themselves in Swagger 2.0. Paste one into OASForge and
+a banner offers the conversion; one click later you have an OpenAPI 3 document, converted entirely
+client-side — the spec never leaves your browser.</p>
+
+<h2>What the converter rewrites</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Swagger 2.0</th><th>OpenAPI 3</th></tr></thead>
+  <tbody>
+    <tr><td><code>host</code> + <code>basePath</code> + <code>schemes</code></td><td><code>servers</code> array</td></tr>
+    <tr><td><code>in: body</code> parameter</td><td><code>requestBody</code> with media-type content</td></tr>
+    <tr><td><code>in: formData</code> parameters</td><td><code>requestBody</code> as form-urlencoded / multipart schema</td></tr>
+    <tr><td><code>produces</code> / <code>consumes</code></td><td>Per-response and per-request <code>content</code> maps</td></tr>
+    <tr><td><code>definitions</code></td><td><code>components.schemas</code></td></tr>
+    <tr><td><code>securityDefinitions</code></td><td><code>components.securitySchemes</code></td></tr>
+    <tr><td><code>#/definitions/*</code> refs</td><td>Rewritten to <code>#/components/schemas/*</code></td></tr>
+  </tbody>
+</table></div>
+
+<h2>Then fix what the converter can't guess</h2>
+<p>Conversion is mechanical; intent isn't. After converting, the version-aware validator points out
+what needs a human: leftover 2.0-isms are flagged with their modern replacements, and most issues
+carry a one-click fix. When you're done, preview the result in Swagger UI, exercise it against the
+in-browser mock server, or export it. Start in the <a href="/editor/">editor</a>.</p>`
+  },
 ];
 
 const FAQ = [
