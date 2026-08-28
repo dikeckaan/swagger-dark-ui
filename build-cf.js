@@ -90,6 +90,7 @@ const homeJsonLd = {
       name: 'OASForge',
       alternateName: 'Swagger Dark UI',
       url: BASE + '/app/',
+      sameAs: ['https://github.com/dikeckaan/swagger-dark-ui'],
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'Any',
       browserRequirements: 'Requires JavaScript',
@@ -150,12 +151,22 @@ const FOOTER_HTML =
   '        </ul>\n' +
   '      </div>\n' +
   '      <div>\n' +
-  '        <h2>Learn more</h2>\n' +
+  '        <h2>Tools</h2>\n' +
   '        <ul>\n' +
   '          <li><a href="/openapi-editor/">Online OpenAPI editor</a></li>\n' +
   '          <li><a href="/openapi-validator/">OpenAPI validator</a></li>\n' +
   '          <li><a href="/openapi-mock-server/">In-browser mock server</a></li>\n' +
   '          <li><a href="/postman-to-openapi/">Postman to OpenAPI converter</a></li>\n' +
+  '          <li><a href="/swagger-2-to-openapi-3/">Swagger 2.0 to OpenAPI 3</a></li>\n' +
+  '        </ul>\n' +
+  '      </div>\n' +
+  '      <div>\n' +
+  '        <h2>Guides</h2>\n' +
+  '        <ul>\n' +
+  '          <li><a href="/swagger-ui-dark-theme/">Swagger UI dark theme</a></li>\n' +
+  '          <li><a href="/openapi-example/">OpenAPI examples</a></li>\n' +
+  '          <li><a href="/openapi-3-1-vs-3-0/">OpenAPI 3.1 vs 3.0</a></li>\n' +
+  '          <li><a href="/openapi-3-2/">OpenAPI 3.2 support</a></li>\n' +
   '          <li><a href="/swagger-editor-alternative/">Swagger Editor alternative</a></li>\n' +
   '        </ul>\n' +
   '      </div>\n' +
@@ -214,6 +225,10 @@ const PAGE_FOOTER = FOOTER_HTML
   .replace('class="sdui-seo-footer"', 'class="site-footer"')
   .replace(/<h2>/g, '<h3>').replace(/<\/h2>/g, '</h3>');
 
+const PAGE_BY_SLUG = {};
+PAGES.forEach(function (p) { PAGE_BY_SLUG[p.slug] = p; });
+const shortTitle = p => p.title.split(' — ')[0].split(' | ')[0];
+
 function layout(p) {
   const url = BASE + '/' + p.slug + '/';
   const crumbs = {
@@ -232,6 +247,17 @@ function layout(p) {
     ogTags(esc(p.title), esc(p.description), url) +
     jsonLdTag(crumbs) +
     (p.jsonLd ? jsonLdTag(p.jsonLd) : '') +
+    (p.date ? jsonLdTag({
+      '@context': 'https://schema.org',
+      '@type': 'TechArticle',
+      headline: p.h1,
+      description: p.description,
+      datePublished: p.date,
+      dateModified: p.date,
+      mainEntityOfPage: url,
+      image: BASE + '/og-image.png',
+      author: { '@type': 'Person', name: 'Kaan Dikeç', url: 'https://kaandikec.com' }
+    }) : '') +
     '  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />\n' +
     TOUCH_ICON +
     FONT_LINKS +
@@ -242,8 +268,19 @@ function layout(p) {
     '    ' + NAV_LINKS + '\n' +
     '  </header>\n' +
     '  <main class="content">\n' +
+    '    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">OASForge</a><span>/</span>' +
+    esc(shortTitle(p)) + '</nav>\n' +
     '    <h1>' + p.h1 + '</h1>\n' +
     p.body + '\n' +
+    (Array.isArray(p.related) && p.related.length
+      ? '    <nav class="related" aria-label="Related reading">\n' +
+        '      <h2>Related reading</h2>\n      <ul>\n' +
+        p.related.filter(function (slug) { return PAGE_BY_SLUG[slug]; }).map(function (slug) {
+          var r = PAGE_BY_SLUG[slug];
+          return '        <li><a href="/' + slug + '/">' + esc(shortTitle(r)) + '</a>' +
+            '<span>' + esc(r.description.split('. ')[0].replace(/\.$/, '')) + '.</span></li>';
+        }).join('\n') + '\n      </ul>\n    </nav>\n'
+      : '') +
     '    <div class="cta-block">\n' +
     '      <p>No signup, no install — the editor runs entirely in your browser.</p>\n' +
     '      <a class="button" href="/editor/">Start in the editor</a>\n' +
@@ -435,7 +472,7 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '    <figure class="frame">\n' +
   '      <div class="frame-bar"><span></span><span></span><span></span><em>oasforge.dev/app</em></div>\n' +
   '      <a href="/app/"><img src="/assets/app-screenshot.jpg" width="2160" height="1320" ' +
-  'alt="OASForge workbench: the demo API rendered in dark-mode Swagger UI with operation search" loading="eager" /></a>\n' +
+  'alt="OASForge workbench: the demo API rendered in dark-mode Swagger UI with operation search" loading="lazy" decoding="async" /></a>\n' +
   '    </figure>\n' +
   '    <section>\n' +
   '      <h2><span class="h-num">01</span>An OpenAPI editor with everything a spec needs</h2>\n' +
@@ -533,6 +570,26 @@ writeDist('sitemap.xml',
   '\n</urlset>\n');
 
 writeDist('robots.txt', 'User-agent: *\nAllow: /\n\nSitemap: ' + BASE + '/sitemap.xml\n');
+
+writeDist('llms.txt',
+  '# OASForge\n\n' +
+  '> ' + DESCRIPTION + '\n\n' +
+  'OASForge (formerly Swagger Dark UI) is a free, source-available (ELv2) OpenAPI workbench by Kaan Dikeç. ' +
+  'Everything runs client-side: editor with live Swagger UI preview, version-aware validation with quick fixes ' +
+  '(Swagger 2.0 through OpenAPI 3.2), a stateful in-browser mock server, Postman import and converters.\n\n' +
+  '## Product\n\n' +
+  '- [Editor](' + BASE + '/app/): the OpenAPI workbench (My API split view at /app/?spec=custom)\n' +
+  '- [Offline single-file app](' + BASE + '/standalone.html): the whole tool in one downloadable HTML file\n' +
+  '- [User guide](' + BASE + '/guide/): complete reference manual\n' +
+  '- [FAQ](' + BASE + '/faq/): privacy, versions, offline use, licensing\n' +
+  '- [License](' + BASE + '/license/): Elastic License 2.0 summary and full text\n\n' +
+  '## Guides\n\n' +
+  PAGES.map(function (p) {
+    return '- [' + shortTitle(p) + '](' + BASE + '/' + p.slug + '/): ' +
+      p.description.split('. ')[0].replace(/\.$/, '') + '.';
+  }).join('\n') + '\n\n' +
+  '## Source\n\n' +
+  '- [GitHub](https://github.com/dikeckaan/swagger-dark-ui): source code, issues and releases\n');
 
 writeDist('404.html', layout({
   slug: '404',
