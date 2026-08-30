@@ -32,7 +32,32 @@ const { PAGES, FAQ } = require('./site-cf/pages.js');
 
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const readDist = f => fs.readFileSync(path.join(DIST, f), 'utf8');
+
+// Analytics beacons (site-cf/analytics.json; empty tokens = no injection).
+// Both IDs are public by design — they ship in the page source either way.
+// The Cloudflare Web Analytics beacon only goes into the oasforge.dev build;
+// GA4 goes into every deployment (it separates hosts on its own). The
+// standalone offline file gets neither: it is built from /app/ before the
+// head injection below, and an offline file phoning home would break its
+// whole point.
+const ANALYTICS = (() => {
+  try { return JSON.parse(read('site-cf/analytics.json')); } catch (e) { return {}; }
+})();
+const ANALYTICS_HTML =
+  (ANALYTICS.gaMeasurementId
+    ? '  <script async src="https://www.googletagmanager.com/gtag/js?id=' + ANALYTICS.gaMeasurementId + '"></script>\n' +
+      '  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}' +
+      "gtag('js',new Date());gtag('config','" + ANALYTICS.gaMeasurementId + "');</script>\n"
+    : '') +
+  (ANALYTICS.cfBeaconToken && !BASE_PATH
+    ? '  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" ' +
+      'data-cf-beacon=\'{"token": "' + ANALYTICS.cfBeaconToken + '"}\'></script>\n'
+    : '');
+
 const writeDist = (f, s) => {
+  if (ANALYTICS_HTML && /\.html$/.test(f) && f !== 'standalone.html' && s.includes('</head>')) {
+    s = s.replace('</head>', ANALYTICS_HTML + '</head>');
+  }
   const p = path.join(DIST, f);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, s);
