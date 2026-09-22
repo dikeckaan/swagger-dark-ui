@@ -421,7 +421,7 @@ const FAQ = [
   },
   {
     q: 'Can I test my API’s rate limits from the spec?',
-    a: 'Yes. Export → “JMeter test plan (.jmx)” asks four questions — spike arrest or quota, which endpoint, where the token comes from, and how many requests over how long — and writes an Apache JMeter 5.4.3 plan from the answers. A spike test releases the whole burst at one instant; a quota test holds a steady rate for the time you set. The token endpoint is detected in your document and called once before the run, path and body values are pre-filled and editable, and HTTP 429 counts as a pass so throttling appears as rate limiting rather than as errors. Run it with jmeter -n -t api-quota.jmx -l results.jtl.'
+    a: 'Yes. Export → “JMeter test plan (.jmx)” opens a scenario generator and writes an Apache JMeter 5.4.3 plan from your answers. Choose the shape — a spike arrest burst released at one instant, a quota held at a steady rate, or a ramp that climbs the rate until the 429s start — then the requests (several endpoints in order or by traffic share, and requests to other APIs by URL) and the credential: fetched from the login endpoint it finds in your document, pasted, or one per line from a CSV for a per-key limit, with the token lifetime and whether it is refreshed once, on expiry or before every iteration. If the document has no servers entry it asks for the real host instead of inventing one. HTTP 429 counts as a pass, so throttling appears as rate limiting rather than as errors. Run it with jmeter -n -t api-quota.jmx -l results.jtl.'
   },
   {
     q: 'How is this different from Swagger Editor?',

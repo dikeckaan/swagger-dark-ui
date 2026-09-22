@@ -156,22 +156,22 @@
       '<tr><td>JMeter test plan (.jmx)</td><td>Opens a short questionnaire and writes an Apache JMeter 5.4.3 plan from the answers — see below.</td></tr>' +
       '<tr><td>Standalone HTML</td><td>A single self-contained file with Swagger UI embedded — opens from disk with no network access; suitable for e-mailing or archiving documentation.</td></tr>' +
       '</tbody></table>' +
-      '<h4>The JMeter wizard</h4>' +
-      '<p>A document cannot say what the test should prove, so the exporter asks four questions and ' +
-      'builds the plan from the answers. Nothing has to be edited in JMeter afterwards.</p>' +
+      '<h4>The JMeter scenario generator</h4>' +
+      '<p>A document cannot say what a test should prove, so the exporter asks — and the answers, ' +
+      'not guesses, become the plan. Nothing needs editing in JMeter afterwards.</p>' +
       '<table><thead><tr><th>Question</th><th>What it changes</th></tr></thead><tbody>' +
-      '<tr><td><strong>What are you testing?</strong></td><td><em>Spike arrest</em> — every request of a burst leaves at the same instant (Synchronizing Timer), repeated as many times as you ask with a pause in between; this is what a per-second limiter cuts off. <em>Quota / rate limit</em> — a steady rate held for a set time (Constant Throughput Timer); this is what a per-minute or per-hour quota runs out of. <em>Plain load test</em> — the same steady rate spread across every operation in the document.</td></tr>' +
-      '<tr><td><strong>Which endpoint?</strong></td><td>One operation per plan, since a limit belongs to a route. Its path and query parameters and its request body are pre-filled from the document and stay editable, and the values you type go straight into the URL — the sampler reads like the call it makes.</td></tr>' +
-      '<tr><td><strong>Where does the token come from?</strong></td><td><em>Fetch it from an API</em> — the login or token endpoint is guessed from the document (you can point it at any other URL), called once in a setUp thread group, and the value at the JSON path you give is shared with every thread. <em>I already have one</em> — pasted into the plan and overridable with <code>-Jtoken</code>. <em>No authentication</em>. The header and prefix come from the security schemes.</td></tr>' +
-      '<tr><td><strong>How many, how long?</strong></td><td>Burst size, number of bursts and the pause between them for a spike; requests per minute, minutes and virtual users for a quota run. The wizard shows the resulting sentence — including the total number of requests — before anything is written.</td></tr>' +
+      '<tr><td><strong>Which host?</strong></td><td>The servers in the document are offered as-is; when there are none, the wizard refuses to invent one and asks for the base URL. Host, port and protocol stay overridable with <code>-Jhost</code>, <code>-Jport</code> and <code>-Jprotocol</code>.</td></tr>' +
+      '<tr><td><strong>What kind of run?</strong></td><td><em>Spike arrest</em> — a burst released at one instant by a Synchronizing Timer, repeated with a pause between bursts; this is what a per-second cap cuts off. <em>Quota</em> — a steady rate held for a set time by a Constant Throughput Timer, with ramp-up and think time. <em>Ramp until it breaks</em> — one thread group per step, each starting where the last ended, climbing the rate until the 429s appear; the step where they start is the limit.</td></tr>' +
+      '<tr><td><strong>Which requests?</strong></td><td>Any number of them, either <em>in order</em> as a user journey or <em>by share</em>, where each request gets a percentage of the traffic (Throughput Controllers). Path, query and body values are pre-filled from the document and editable, and a request pointing at a completely different API can be added by full URL — so two services can be driven in one plan.</td></tr>' +
+      '<tr><td><strong>Which credential?</strong></td><td><em>Fetch a token</em> from the login endpoint the wizard detects, <em>paste one</em> (overridable with <code>-Jtoken</code>), read <em>one per line from a CSV</em> — the way to prove a per-key limit — or send none. The header and prefix come from the security schemes.</td></tr>' +
+      '<tr><td><strong>How long is the token good for?</strong></td><td>The lifetime in minutes plus when it is fetched: <em>once</em> before the run, <em>again when it expires</em> (a Critical Section Controller lets one thread refresh while the others keep working), or <em>before every iteration</em>, which puts the token endpoint under the same load as the API.</td></tr>' +
+      '<tr><td><strong>What counts as a pass?</strong></td><td>2xx always; <code>429</code> by default, because JMeter fails a throttled sample on its own and a rate-limit run would otherwise drown in false errors. Redirects, extra codes, a response-time limit and the connect/response timeouts are all answers here.</td></tr>' +
       '</tbody></table>' +
-      '<p>Every plan passes on <code>2xx</code> <em>and</em> <code>429</code>: JMeter marks a throttled ' +
-      'response failed on its own, so the assertion resets the status first and a rate limit becomes a ' +
-      'result instead of an error, while a 5xx still fails. After the run:</p>' +
-      '<pre>jmeter -n -t api-quota.jmx -l results.jtl\nawk -F, \'NR&gt;1 {print $4}\' results.jtl | sort | uniq -c</pre>' +
-      '<p>Host, port and protocol stay overridable with <code>-Jhost</code>, <code>-Jport</code> and ' +
-      '<code>-Jprotocol</code>, and a quota plan also takes <code>-Jrpm</code>, <code>-Jduration</code> ' +
-      'and <code>-Jusers</code>, so the same file can be pointed at staging first.</p>'
+      '<p>The wizard states what will run — including the total number of requests — before writing ' +
+      'anything, and afterwards gives the command and how to read the result:</p>' +
+      '<pre>jmeter -n -t api-quota.jmx -l results.jtl\nawk -F, \'NR&gt;1 {print $3 " " $4}\' results.jtl | sort | uniq -c</pre>' +
+      '<p>The plans use only long-standing core elements and no Groovy, so they open and run on ' +
+      'JMeter 5.4.3 — on any Java version it supports — as well as on later 5.x.</p>'
     },
     { id: 'shortcuts', title: 'Keyboard shortcuts', html:
       '<table><thead><tr><th>Shortcut</th><th>Action</th></tr></thead><tbody>' +
