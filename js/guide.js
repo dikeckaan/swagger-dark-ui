@@ -153,8 +153,17 @@
       '<table><thead><tr><th>Format</th><th>Notes</th></tr></thead><tbody>' +
       '<tr><td>YAML file</td><td><em>Download</em> (or ' + kbd('Ctrl/Cmd S') + ') saves the raw document.</td></tr>' +
       '<tr><td>Postman Collection v2.1</td><td>Folders per tag, URL variables for path parameters, example values and bodies derived from schemas, authentication mapped from the security schemes.</td></tr>' +
+      '<tr><td>JMeter test plan (.jmx)</td><td>An Apache JMeter 5.4.3 plan: one sampler per operation grouped by tag, HTTP defaults and header/cookie/auth managers from the servers and security schemes, a Constant Throughput Timer for the request rate, and an assertion that treats <code>429</code> as a pass so throttling shows up as rate limiting rather than as failures.</td></tr>' +
       '<tr><td>Standalone HTML</td><td>A single self-contained file with Swagger UI embedded — opens from disk with no network access; suitable for e-mailing or archiving documentation.</td></tr>' +
-      '</tbody></table>'
+      '</tbody></table>' +
+      '<p>The JMeter plan is driven entirely by properties, so the same file covers a smoke run and a ' +
+      'rate-limit run without being edited:</p>' +
+      '<pre>jmeter -n -t api.jmx -Jthreads=50 -Jrampup=10 -Jduration=300 -Jrpm=6000 \\\n  -l results.jtl</pre>' +
+      '<p><code>threads</code>, <code>rampup</code>, <code>duration</code> and <code>rpm</code> (requests ' +
+      'per minute for the whole thread group) shape the load; <code>protocol</code>, <code>host</code>, ' +
+      '<code>port</code>, <code>basePath</code> and the credential variables point it at a target. ' +
+      'Write operations (POST/PUT/PATCH/DELETE) are exported <em>disabled</em>, so a load test cannot ' +
+      'accidentally hammer a real API — enable the ones you mean to run.</p>'
     },
     { id: 'shortcuts', title: 'Keyboard shortcuts', html:
       '<table><thead><tr><th>Shortcut</th><th>Action</th></tr></thead><tbody>' +
