@@ -420,6 +420,10 @@ const FAQ = [
     a: 'Yes. Open a Postman Collection v2 / v2.1 export via “Open file” or “Load URL” and it is converted to OpenAPI 3.0.3 automatically — auth schemes mapped, saved responses preserved as named examples, transport headers cleaned up.'
   },
   {
+    q: 'Can I load-test my API from the spec?',
+    a: 'Yes. Export → “JMeter test plan (.jmx)” turns the document into an Apache JMeter 5.4.3 plan: a sampler per operation grouped by tag, HTTP defaults, header, cookie and authorization managers taken from the servers and security schemes, and a Constant Throughput Timer for the request rate. Threads, ramp-up, duration, rate and target host are JMeter properties, so one file covers a smoke run and a rate-limit run: jmeter -n -t api.jmx -Jthreads=50 -Jrpm=6000 -l results.jtl. The built-in assertion counts HTTP 429 as a pass, so throttling shows up as rate limiting instead of as errors.'
+  },
+  {
     q: 'How is this different from Swagger Editor?',
     a: 'OASForge adds a native dark theme, a stateful in-browser mock server, one-click quick fixes, a structure insert menu, Postman import, local version history with diff, and full offline support — while keeping the familiar code-plus-preview layout.'
   },

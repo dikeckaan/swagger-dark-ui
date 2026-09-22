@@ -37,7 +37,7 @@ site, deployed to both Cloudflare and GitHub Pages from one build.
 - 🧪 **Example generator** — one Insert-menu click derives an `example:` block from the schema under the cursor ($refs resolved), reusing the mock server's schema→example engine
 - 🔁 **Swagger 2.0 → OpenAPI 3 converter** (`js/convert20.js`) — paste a 2.0 document and a banner offers one-click conversion: servers from `host`/`basePath`/`schemes`, `body`/`formData` parameters → `requestBody`, `produces` → response `content`, `definitions`/`securityDefinitions` → `components`, full `$ref` rewrite
 - 🕒 **Version history** (`js/history.js`) — automatic (rate-limited) and manual snapshots per spec, stored compressed in `localStorage`; restore any snapshot or view a color-coded line diff against the current text
-- 📤 **Export** (`js/export.js`) — download the current spec as a **Postman Collection v2.1** (folders per tag, path/query/header params, example request bodies, auth mapping) or as **standalone HTML docs**: a single self-contained file with Swagger UI inlined that opens offline from disk
+- 📤 **Export** (`js/export.js`) — download the current spec as a **Postman Collection v2.1** (folders per tag, path/query/header params, example request bodies, auth mapping), as an **Apache JMeter 5.4.3 test plan** (`.jmx`) for load and rate-limit testing, or as **standalone HTML docs**: a single self-contained file with Swagger UI inlined that opens offline from disk
 - 🔌 **Fully offline** — all third-party assets are vendored (`vendor/`, hash-verified against the previously pinned SRI values), so the site, the Docker image and exported docs work with no internet at all
 - 📋 **Edit a copy** — one click turns the demo API or Petstore into an editable copy in the editor (converted to tidy YAML), so the ready-made specs double as starting templates
 - 📮 **Postman import** — drop a Postman Collection (v2 / v2.1+) export into *Open file* or *Load URL* and it is converted to OpenAPI 3 automatically (`js/postman.js`)
@@ -109,7 +109,7 @@ optional live Petstore spec view requires connectivity.
 ├─ js/autocomplete.js            # Context-aware OpenAPI autocomplete ($ref picker incl.)
 ├─ js/convert20.js               # Swagger 2.0 → OpenAPI 3.0 converter
 ├─ js/history.js                 # Snapshot history with restore + line diff
-├─ js/export.js                  # Postman collection & standalone-HTML exporters
+├─ js/export.js                  # Postman collection, JMeter .jmx & standalone-HTML exporters
 ├─ vendor/                       # Vendored Swagger UI / CodeMirror / js-yaml / lz-string
 ├─ Dockerfile / docker-compose.yml  # Optional: serve the site locally with nginx (offline)
 ├─ specs/demo-api.yaml           # Comprehensive OpenAPI 3.1 demo spec
