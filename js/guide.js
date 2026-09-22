@@ -153,17 +153,25 @@
       '<table><thead><tr><th>Format</th><th>Notes</th></tr></thead><tbody>' +
       '<tr><td>YAML file</td><td><em>Download</em> (or ' + kbd('Ctrl/Cmd S') + ') saves the raw document.</td></tr>' +
       '<tr><td>Postman Collection v2.1</td><td>Folders per tag, URL variables for path parameters, example values and bodies derived from schemas, authentication mapped from the security schemes.</td></tr>' +
-      '<tr><td>JMeter test plan (.jmx)</td><td>An Apache JMeter 5.4.3 plan: one sampler per operation grouped by tag, HTTP defaults and header/cookie/auth managers from the servers and security schemes, a Constant Throughput Timer for the request rate, and an assertion that treats <code>429</code> as a pass so throttling shows up as rate limiting rather than as failures.</td></tr>' +
+      '<tr><td>JMeter test plan (.jmx)</td><td>Opens a short questionnaire and writes an Apache JMeter 5.4.3 plan from the answers — see below.</td></tr>' +
       '<tr><td>Standalone HTML</td><td>A single self-contained file with Swagger UI embedded — opens from disk with no network access; suitable for e-mailing or archiving documentation.</td></tr>' +
       '</tbody></table>' +
-      '<p>The JMeter plan is driven entirely by properties, so the same file covers a smoke run and a ' +
-      'rate-limit run without being edited:</p>' +
-      '<pre>jmeter -n -t api.jmx -Jthreads=50 -Jrampup=10 -Jduration=300 -Jrpm=6000 \\\n  -l results.jtl</pre>' +
-      '<p><code>threads</code>, <code>rampup</code>, <code>duration</code> and <code>rpm</code> (requests ' +
-      'per minute for the whole thread group) shape the load; <code>protocol</code>, <code>host</code>, ' +
-      '<code>port</code>, <code>basePath</code> and the credential variables point it at a target. ' +
-      'Write operations (POST/PUT/PATCH/DELETE) are exported <em>disabled</em>, so a load test cannot ' +
-      'accidentally hammer a real API — enable the ones you mean to run.</p>'
+      '<h4>The JMeter wizard</h4>' +
+      '<p>A document cannot say what the test should prove, so the exporter asks four questions and ' +
+      'builds the plan from the answers. Nothing has to be edited in JMeter afterwards.</p>' +
+      '<table><thead><tr><th>Question</th><th>What it changes</th></tr></thead><tbody>' +
+      '<tr><td><strong>What are you testing?</strong></td><td><em>Spike arrest</em> — every request of a burst leaves at the same instant (Synchronizing Timer), repeated as many times as you ask with a pause in between; this is what a per-second limiter cuts off. <em>Quota / rate limit</em> — a steady rate held for a set time (Constant Throughput Timer); this is what a per-minute or per-hour quota runs out of. <em>Plain load test</em> — the same steady rate spread across every operation in the document.</td></tr>' +
+      '<tr><td><strong>Which endpoint?</strong></td><td>One operation per plan, since a limit belongs to a route. Its path and query parameters and its request body are pre-filled from the document and stay editable, and the values you type go straight into the URL — the sampler reads like the call it makes.</td></tr>' +
+      '<tr><td><strong>Where does the token come from?</strong></td><td><em>Fetch it from an API</em> — the login or token endpoint is guessed from the document (you can point it at any other URL), called once in a setUp thread group, and the value at the JSON path you give is shared with every thread. <em>I already have one</em> — pasted into the plan and overridable with <code>-Jtoken</code>. <em>No authentication</em>. The header and prefix come from the security schemes.</td></tr>' +
+      '<tr><td><strong>How many, how long?</strong></td><td>Burst size, number of bursts and the pause between them for a spike; requests per minute, minutes and virtual users for a quota run. The wizard shows the resulting sentence — including the total number of requests — before anything is written.</td></tr>' +
+      '</tbody></table>' +
+      '<p>Every plan passes on <code>2xx</code> <em>and</em> <code>429</code>: JMeter marks a throttled ' +
+      'response failed on its own, so the assertion resets the status first and a rate limit becomes a ' +
+      'result instead of an error, while a 5xx still fails. After the run:</p>' +
+      '<pre>jmeter -n -t api-quota.jmx -l results.jtl\nawk -F, \'NR&gt;1 {print $4}\' results.jtl | sort | uniq -c</pre>' +
+      '<p>Host, port and protocol stay overridable with <code>-Jhost</code>, <code>-Jport</code> and ' +
+      '<code>-Jprotocol</code>, and a quota plan also takes <code>-Jrpm</code>, <code>-Jduration</code> ' +
+      'and <code>-Jusers</code>, so the same file can be pointed at staging first.</p>'
     },
     { id: 'shortcuts', title: 'Keyboard shortcuts', html:
       '<table><thead><tr><th>Shortcut</th><th>Action</th></tr></thead><tbody>' +

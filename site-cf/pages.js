@@ -420,8 +420,8 @@ const FAQ = [
     a: 'Yes. Open a Postman Collection v2 / v2.1 export via “Open file” or “Load URL” and it is converted to OpenAPI 3.0.3 automatically — auth schemes mapped, saved responses preserved as named examples, transport headers cleaned up.'
   },
   {
-    q: 'Can I load-test my API from the spec?',
-    a: 'Yes. Export → “JMeter test plan (.jmx)” turns the document into an Apache JMeter 5.4.3 plan: a sampler per operation grouped by tag, HTTP defaults, header, cookie and authorization managers taken from the servers and security schemes, and a Constant Throughput Timer for the request rate. Threads, ramp-up, duration, rate and target host are JMeter properties, so one file covers a smoke run and a rate-limit run: jmeter -n -t api.jmx -Jthreads=50 -Jrpm=6000 -l results.jtl. The built-in assertion counts HTTP 429 as a pass, so throttling shows up as rate limiting instead of as errors.'
+    q: 'Can I test my API’s rate limits from the spec?',
+    a: 'Yes. Export → “JMeter test plan (.jmx)” asks four questions — spike arrest or quota, which endpoint, where the token comes from, and how many requests over how long — and writes an Apache JMeter 5.4.3 plan from the answers. A spike test releases the whole burst at one instant; a quota test holds a steady rate for the time you set. The token endpoint is detected in your document and called once before the run, path and body values are pre-filled and editable, and HTTP 429 counts as a pass so throttling appears as rate limiting rather than as errors. Run it with jmeter -n -t api-quota.jmx -l results.jtl.'
   },
   {
     q: 'How is this different from Swagger Editor?',

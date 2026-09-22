@@ -131,7 +131,7 @@ const homeJsonLd = {
         'Swagger 2.0 to OpenAPI 3 converter',
         'Context-aware autocomplete and structure insert menu',
         'Version history with diff, export to Postman, JMeter and standalone HTML docs',
-        'Apache JMeter 5.4.3 test plan export for load and rate-limit testing',
+        'Guided Apache JMeter 5.4.3 export: spike arrest and quota (rate limit) tests',
         'Works fully offline (PWA and single-file build)'
       ]
     }
@@ -434,7 +434,7 @@ const HERO_FEATURES = [
   ['green', icon('<path d="M12 3v9"/><path d="M8 8l4 4 4-4"/><rect x="4" y="15" width="16" height="6" rx="2"/>'),
     'Postman import', 'Drop a collection export and get clean OpenAPI 3: auth mapped, saved responses kept as named examples, noise headers removed.'],
   ['orange', icon('<path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>'),
-    'Converters and exports', 'Swagger 2.0 → OpenAPI 3 in one click; export Postman collections, a JMeter 5.4.3 load-test plan or a self-contained HTML docs file.'],
+    'Converters and exports', 'Swagger 2.0 → OpenAPI 3 in one click; export Postman collections, a guided JMeter rate-limit test plan or a self-contained HTML docs file.'],
   ['purple', icon('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>'),
     'Offline and private', 'No account, no backend — documents stay in your browser. Installable as a PWA, or a single HTML file that runs from disk.']
 ];
@@ -530,7 +530,7 @@ writeDist('index.html', withBase('<!DOCTYPE html>\n<html lang="en" data-theme="d
   '        <li><strong>Shape it fast.</strong> The insert menu writes correct structure, autocomplete offers only ' +
   'valid keys, and the validator explains every issue with a fix attached.</li>\n' +
   '        <li><strong>Try it and ship it.</strong> Exercise the API against the in-page mock server, then export ' +
-  'a Postman collection, a JMeter load-test plan, standalone HTML docs, or a share link.</li>\n' +
+  'a Postman collection, a JMeter spike or rate-limit test, standalone HTML docs, or a share link.</li>\n' +
   '      </ol>\n' +
   '    </section>\n' +
   '    <section>\n' +
