@@ -153,25 +153,27 @@
       '<table><thead><tr><th>Format</th><th>Notes</th></tr></thead><tbody>' +
       '<tr><td>YAML file</td><td><em>Download</em> (or ' + kbd('Ctrl/Cmd S') + ') saves the raw document.</td></tr>' +
       '<tr><td>Postman Collection v2.1</td><td>Folders per tag, URL variables for path parameters, example values and bodies derived from schemas, authentication mapped from the security schemes.</td></tr>' +
-      '<tr><td>JMeter test plan (.jmx)</td><td>Opens a short questionnaire and writes an Apache JMeter 5.4.3 plan from the answers — see below.</td></tr>' +
+      '<tr><td>JMeter test plan (.jmx)</td><td>Opens a six-step scenario wizard and writes an Apache JMeter 5.4.3 plan that grades itself — see below.</td></tr>' +
       '<tr><td>Standalone HTML</td><td>A single self-contained file with Swagger UI embedded — opens from disk with no network access; suitable for e-mailing or archiving documentation.</td></tr>' +
       '</tbody></table>' +
       '<h4>The JMeter scenario generator</h4>' +
-      '<p>A document cannot say what a test should prove, so the exporter asks — and the answers, ' +
-      'not guesses, become the plan. Nothing needs editing in JMeter afterwards.</p>' +
-      '<table><thead><tr><th>Question</th><th>What it changes</th></tr></thead><tbody>' +
-      '<tr><td><strong>Which host?</strong></td><td>The servers in the document are offered as-is; when there are none, the wizard refuses to invent one and asks for the base URL. Host, port and protocol stay overridable with <code>-Jhost</code>, <code>-Jport</code> and <code>-Jprotocol</code>.</td></tr>' +
-      '<tr><td><strong>What kind of run?</strong></td><td><em>Spike arrest</em> — a burst released at one instant by a Synchronizing Timer, repeated with a pause between bursts; this is what a per-second cap cuts off. <em>Quota</em> — a steady rate held for a set time by a Constant Throughput Timer, with ramp-up and think time. <em>Ramp until it breaks</em> — one thread group per step, each starting where the last ended, climbing the rate until the 429s appear; the step where they start is the limit.</td></tr>' +
-      '<tr><td><strong>Which requests?</strong></td><td>Any number of them, either <em>in order</em> as a user journey or <em>by share</em>, where each request gets a percentage of the traffic (Throughput Controllers). Path, query and body values are pre-filled from the document and editable, and a request pointing at a completely different API can be added by full URL — so two services can be driven in one plan.</td></tr>' +
-      '<tr><td><strong>Which credential?</strong></td><td><em>Fetch a token</em> from the login endpoint the wizard detects, <em>paste one</em> (overridable with <code>-Jtoken</code>), read <em>one per line from a CSV</em> — the way to prove a per-key limit — or send none. The header and prefix come from the security schemes.</td></tr>' +
-      '<tr><td><strong>How long is the token good for?</strong></td><td>The lifetime in minutes plus when it is fetched: <em>once</em> before the run, <em>again when it expires</em> (a Critical Section Controller lets one thread refresh while the others keep working), or <em>before every iteration</em>, which puts the token endpoint under the same load as the API.</td></tr>' +
-      '<tr><td><strong>What counts as a pass?</strong></td><td>2xx always; <code>429</code> by default, because JMeter fails a throttled sample on its own and a rate-limit run would otherwise drown in false errors. Redirects, extra codes, a response-time limit and the connect/response timeouts are all answers here.</td></tr>' +
+      '<p>A document cannot say what a load test should prove, so the exporter asks — in six short steps — and ' +
+      'writes a plan that runs as downloaded and <strong>grades itself</strong>: every scenario is its own thread group, ' +
+      'they run one after another, and a tearDown group writes one <code>VERDICT</code> line per scenario (PASS or FAIL ' +
+      'against what the limiter configuration says should have happened), on the console and in the results file.</p>' +
+      '<table><thead><tr><th>Step</th><th>What it decides</th></tr></thead><tbody>' +
+      '<tr><td><strong>Target</strong></td><td>The servers in the document are offered as-is; when there are none, the wizard asks for the base URL instead of inventing one. Host, port and protocol stay overridable with <code>-Jhost</code>, <code>-Jport</code> and <code>-Jprotocol</code>.</td></tr>' +
+      '<tr><td><strong>Limiter</strong></td><td><em>Apigee Edge policy</em> — paste the Quota and/or SpikeArrest XML (or the API product JSON): the allowed count, the window and its type (calendar, rolling, flexi, default), the identifier the counter is keyed on, Distributed/Synchronous accuracy, message processors and the fault code are read from it, and any <code>ref="…"</code> value the policy reads at run time is asked for. <em>A limit I know</em> — N per window, counted per credential, header, query parameter, IP or for the whole API. <em>Find the limit</em> — a staircase. <em>No limiter</em> — plain load. The status the limiter returns (429, or 500 on Edge without <code>features.isHTTPStatusTooManyRequestEnabled</code>) is an answer here.</td></tr>' +
+      '<tr><td><strong>Scenarios</strong></td><td>Derived from the limiter, each with an expected outcome and its own knobs: <em>walk up to the quota and over it</em> (exactly N pass, the rest are refused), <em>another caller is not affected</em> (a second identifier or a second app right after the quota is used up), <em>wait for the window and prove it resets</em> (the wait is computed from the window type — a calendar window is aligned at run time), <em>hold a rate under / over the quota</em>, and for spike arrest a <em>burst</em> released by a Synchronizing Timer, <em>paced under the rate</em> and <em>paced at twice the rate</em>. A limit nobody wrote down gets a <em>staircase</em>; no limiter gets a <em>steady rate</em> or <em>bursts</em>.</td></tr>' +
+      '<tr><td><strong>Requests</strong></td><td>Any number of them, <em>in order</em> or <em>by share</em> (Throughput Controllers); path, query and body values are pre-filled from the document and editable, and a request to a completely different API can be added by full URL.</td></tr>' +
+      '<tr><td><strong>Credential</strong></td><td><em>Fetch a token once</em> — a setUp thread group calls the token endpoint before any load and every request reuses the token (the OAuth 2 flow\'s <code>tokenUrl</code> from the security schemes is pre-filled; client id and secret can go in a Basic header, as Apigee\'s OAuthV2 endpoints expect; <code>expires_in</code> is read when present); optionally refreshed on expiry (one thread at a time) or every iteration. Or <em>paste one</em> (<code>-Jtoken</code>), <em>one per line from a CSV</em>, or none. Also here: what counts as a pass, timeouts, and a rate-limit header to record.</td></tr>' +
+      '<tr><td><strong>Review</strong></td><td>The timeline — every scenario with its expectation, duration and request count — the total, and the plan tree, before anything is downloaded. Answers are remembered per document (secrets excluded).</td></tr>' +
       '</tbody></table>' +
-      '<p>The wizard states what will run — including the total number of requests — before writing ' +
-      'anything, and afterwards gives the command and how to read the result:</p>' +
-      '<pre>jmeter -n -t api-quota.jmx -l results.jtl\nawk -F, \'NR&gt;1 {print $3 " " $4}\' results.jtl | sort | uniq -c</pre>' +
-      '<p>The plans use only long-standing core elements and no Groovy, so they open and run on ' +
-      'JMeter 5.4.3 — on any Java version it supports — as well as on later 5.x.</p>'
+      '<pre>jmeter -n -t api-apigee.jmx -l results.jtl -e -o report\ngrep VERDICT results.jtl</pre>' +
+      '<p>Every response is sorted into pass / limited / other by a post-processor; for Apigee the fault body ' +
+      'says whether <code>QuotaViolation</code> or <code>SpikeArrestViolation</code> answered, so a refusal from the ' +
+      'wrong policy is reported as such. The plans use only long-standing core elements and BeanShell — no plugins, ' +
+      'no Groovy — so they open and run on JMeter 5.4.3 on any Java it supports, as well as on later 5.x.</p>'
     },
     { id: 'shortcuts', title: 'Keyboard shortcuts', html:
       '<table><thead><tr><th>Shortcut</th><th>Action</th></tr></thead><tbody>' +

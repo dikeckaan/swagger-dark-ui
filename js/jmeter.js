@@ -1,21 +1,48 @@
-/* Swagger Dark UI — JMeter scenario generator.
-   "Export → JMeter test plan" does not guess what the test should be: it asks.
-   Which limiter is under test (a spike arrest that caps bursts, a quota that
-   caps a sustained rate, or a staircase that walks the rate up until the
-   limiter answers), which requests take part and in what mix, where the token
-   comes from and how long it stays valid, and what counts as a pass. The
-   answers become an Apache JMeter 5.4.3 plan that runs as downloaded. */
-(function () {
+/* OASForge — JMeter scenario builder.
+   Turns the wizard's answers (js/jmeter-wizard.js) into an Apache JMeter
+   5.4.3 plan that runs as downloaded and *grades itself*: every scenario is
+   its own thread group, run one after another; a post-processor sorts every
+   response into pass / limited / other (and, for Apigee, reads which policy
+   fired from the fault body); a tearDown group then writes one VERDICT
+   sample per scenario — PASS or FAIL against what the limiter config says
+   should have happened — so the answer is one grep away.
+
+   Only long-standing core elements and BeanShell are used (no Groovy, no
+   plugins), so the plan opens on JMeter 5.4.3 under any Java it supports and
+   on later 5.x releases alike. Everything that depends on the deployment
+   (host, port, token, rates) stays overridable with -J properties. */
+(function (root) {
   'use strict';
 
   var METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
   var TOKEN_HINT = /token|login|signin|sign-in|oauth|authenticate|authorize|session|connect/;
+  var UNIT_SECONDS = { second: 1, minute: 60, hour: 3600, day: 86400, week: 604800, month: 2592000 };
 
-  /* The document helpers are shared with the other exporters. */
-  function isObj(v) { return SduiExport.util.isObj(v); }
-  function deref(doc, n) { return SduiExport.util.deref(doc, n); }
-  function exampleFor(doc, s) { return SduiExport.util.exampleFor(doc, s); }
-  function slug(doc) { return SduiExport.util.slug(doc); }
+  function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+
+  function deref(doc, node) {
+    if (isObj(node) && typeof node.$ref === 'string' && node.$ref.slice(0, 2) === '#/') {
+      var cur = doc;
+      var parts = node.$ref.slice(2).split('/');
+      for (var i = 0; i < parts.length && cur; i++) {
+        cur = cur[parts[i].replace(/~1/g, '/').replace(/~0/g, '~')];
+      }
+      return cur || {};
+    }
+    return node;
+  }
+
+  function exampleFor(doc, schema) {
+    if (!schema) return undefined;
+    var mock = root.SduiMock;
+    if (mock && mock.exampleFromSchema) return mock.exampleFromSchema(schema, doc);
+    return undefined;
+  }
+
+  function slug(doc) {
+    var title = (doc && doc.info && doc.info.title) || 'api';
+    return String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'api';
+  }
 
   /* ==================================================================
      1. Reading the document
@@ -37,7 +64,9 @@
           method: method,
           op: op,
           shared: shared,
+          tags: Array.isArray(op.tags) ? op.tags : [],
           summary: op.summary || op.operationId || '',
+          deprecated: op.deprecated === true,
           tokenish: TOKEN_HINT.test(path + ' ' + (op.operationId || '') + ' ' + (op.summary || ''))
         });
       });
@@ -51,16 +80,13 @@
   }
 
   function guessTarget(ops, login) {
-    var plain = ops.filter(function (o) { return o !== login && !o.tokenish; });
-    var read = plain.filter(function (o) { return o.method === 'get'; });
-    return read[0] || plain[0] || ops[0] || null;
+    var plain = ops.filter(function (o) { return o !== login && !o.tokenish && !o.deprecated; });
+    var read = plain.filter(function (o) { return o.method === 'get' && !/\{/.test(o.path); });
+    return read[0] || plain.filter(function (o) { return o.method === 'get'; })[0] || plain[0] || ops[0] || null;
   }
 
-  /* Every server URL the document offers, with its variables resolved. An
-     empty list means the document never says where the API lives — the wizard
-     then has to ask, because "localhost" is not a target. */
   function serverUrls(doc) {
-    if (!Array.isArray(doc.servers)) return [];
+    if (!isObj(doc) || !Array.isArray(doc.servers)) return [];
     var out = [];
     doc.servers.forEach(function (server) {
       if (!isObj(server) || typeof server.url !== 'string' || !server.url) return;
@@ -71,16 +97,11 @@
           return isObj(v) && v.default !== undefined ? String(v.default) : match;
         });
       }
-      // A relative server URL ("/v1") names a path, not a host: it cannot be
-      // tested on its own, so it is not offered as a target.
       if (/^https?:\/\//i.test(url) && !/\{|\}/.test(url)) out.push(url.replace(/\/+$/, ''));
     });
     return out;
   }
 
-  /* A base URL the plan can be pointed at. Returns null when the text is not
-     usable, so the wizard can refuse to generate rather than write a plan
-     aimed at example.com. */
   function parseBase(url) {
     var m = String(url || '').trim().match(/^(https?):\/\/([^/:?#\s]+)(?::(\d+))?([^?#\s]*)/i);
     if (!m) return null;
@@ -93,23 +114,58 @@
     };
   }
 
+  /* The security scheme the document leans on, read into "which header
+     carries the credential" plus — for OAuth 2 — the token endpoint. */
   function authOf(doc) {
-    var schemes = doc.components && doc.components.securitySchemes;
-    var req = Array.isArray(doc.security) && doc.security.length ? doc.security[0] : null;
-    var scheme = null;
-    if (req && isObj(schemes)) scheme = deref(doc, schemes[Object.keys(req)[0]]);
-    if (!isObj(scheme) && isObj(schemes)) {
-      var names = Object.keys(schemes);
-      if (names.length) scheme = deref(doc, schemes[names[0]]);
+    var schemes = isObj(doc) && doc.components && doc.components.securitySchemes;
+    var out = { header: 'Authorization', prefix: 'Bearer ', secured: false, scheme: null, oauth: null, apiKeyIn: null };
+    if (!isObj(schemes)) return out;
+    var names = Object.keys(schemes);
+    var preferred = [];
+    if (Array.isArray(doc.security)) {
+      doc.security.forEach(function (req) { if (isObj(req)) preferred = preferred.concat(Object.keys(req)); });
     }
-    if (!isObj(scheme)) return { header: 'Authorization', prefix: 'Bearer ', secured: false };
-    if (scheme.type === 'apiKey' && scheme.in === 'header') {
-      return { header: scheme.name || 'X-API-Key', prefix: '', secured: true };
+    if (isObj(doc.paths)) {
+      Object.keys(doc.paths).forEach(function (p) {
+        var item = doc.paths[p];
+        if (!isObj(item)) return;
+        METHODS.forEach(function (m) {
+          var op = item[m];
+          if (isObj(op) && Array.isArray(op.security)) {
+            op.security.forEach(function (req) { if (isObj(req)) preferred = preferred.concat(Object.keys(req)); });
+          }
+        });
+      });
     }
-    if (scheme.type === 'http' && /^basic$/i.test(scheme.scheme || '')) {
-      return { header: 'Authorization', prefix: 'Basic ', secured: true };
+    var order = preferred.concat(names).filter(function (n, i, a) { return names.indexOf(n) !== -1 && a.indexOf(n) === i; });
+    // OAuth 2 wins when it is used anywhere: it is the one with a token endpoint.
+    var oauthName = order.filter(function (n) { var s = deref(doc, schemes[n]); return isObj(s) && s.type === 'oauth2'; })[0];
+    var name = oauthName || order[0];
+    var scheme = deref(doc, schemes[name]);
+    if (!isObj(scheme)) return out;
+    out.secured = true;
+    out.scheme = name;
+    if (scheme.type === 'apiKey') {
+      out.apiKeyIn = scheme.in || 'header';
+      if (scheme.in === 'header' || !scheme.in) { out.header = scheme.name || 'X-API-Key'; out.prefix = ''; }
+      else if (scheme.in === 'query') { out.header = 'Authorization'; out.prefix = ''; out.queryName = scheme.name; }
+    } else if (scheme.type === 'http' && /^basic$/i.test(scheme.scheme || '')) {
+      out.prefix = 'Basic ';
+    } else if (scheme.type === 'oauth2' && isObj(scheme.flows)) {
+      var flows = scheme.flows;
+      var pick = ['clientCredentials', 'password', 'authorizationCode', 'implicit'].filter(function (f) {
+        return isObj(flows[f]) && typeof flows[f].tokenUrl === 'string';
+      })[0];
+      if (pick) {
+        var flow = flows[pick];
+        out.oauth = {
+          flow: pick,
+          tokenUrl: flow.tokenUrl,
+          scopes: isObj(flow.scopes) ? Object.keys(flow.scopes) : []
+        };
+      }
     }
-    return { header: 'Authorization', prefix: 'Bearer ', secured: true };
+    return out;
   }
 
   function scalar(value, fallback) {
@@ -136,31 +192,28 @@
     return scalar(value, placeholder(schema));
   }
 
-  /* A urlencoded body is shown and stored as "a=b&c=d" so what the wizard
-     displays is what goes on the wire; switching the content type converts
-     between the two shapes instead of leaving a mismatched body behind. */
   function asForm(text) {
     try {
       var o = JSON.parse(text);
       if (o && typeof o === 'object' && !Array.isArray(o)) {
         return Object.keys(o).map(function (k) {
           var v = o[k];
-          return encodeURIComponent(k) + '=' +
-            encodeURIComponent(v === null || typeof v === 'object' ? '' : v);
+          return encodeURIComponent(k) + '=' + encodeURIComponent(v === null || typeof v === 'object' ? '' : v);
         }).join('&');
       }
-    } catch (e) { /* not JSON — assume it is already form text */ }
+    } catch (e) { /* already form text */ }
     return text;
   }
 
   function asJson(text) {
     if (/^\s*[[{]/.test(text)) return text;
     var o = {};
-    text.split('&').forEach(function (pair) {
+    String(text).split('&').forEach(function (pair) {
       if (!pair) return;
       var eq = pair.indexOf('=');
-      o[decodeURIComponent(eq === -1 ? pair : pair.slice(0, eq))] =
-        eq === -1 ? '' : decodeURIComponent(pair.slice(eq + 1));
+      try {
+        o[decodeURIComponent(eq === -1 ? pair : pair.slice(0, eq))] = eq === -1 ? '' : decodeURIComponent(pair.slice(eq + 1));
+      } catch (e) { o[pair] = ''; }
     });
     return JSON.stringify(o, null, 2);
   }
@@ -179,14 +232,9 @@
         : exampleFor(doc, mt.schema));
     if (example === undefined) example = {};
     var text = typeof example === 'string' ? example : JSON.stringify(example, null, 2);
-    return {
-      contentType: mime,
-      text: /x-www-form-urlencoded/.test(mime) ? asForm(text) : text
-    };
+    return { contentType: mime, text: /x-www-form-urlencoded/.test(mime) ? asForm(text) : text };
   }
 
-  /* A request the wizard shows as editable fields and the builder emits as a
-     sampler: concrete values only, no JMeter variables to decode. */
   function requestFor(doc, entry) {
     var params = entry.shared.concat(Array.isArray(entry.op.parameters) ? entry.op.parameters : [])
       .map(function (p) { return deref(doc, p); })
@@ -200,6 +248,8 @@
       url: '',
       label: entry.method.toUpperCase() + ' ' + entry.path,
       summary: entry.summary,
+      tags: entry.tags,
+      deprecated: entry.deprecated,
       pathParams: [],
       query: [],
       headers: [],
@@ -207,47 +257,455 @@
     };
     params.forEach(function (p) {
       var value = paramValue(doc, p);
-      if (p.in === 'path') {
-        req.pathParams.push({ name: p.name, value: value });
-      } else if (p.in === 'query') {
-        if (p.required === true || p.example !== undefined) req.query.push({ name: p.name, value: value });
-      } else if (p.in === 'header' && !/^(authorization|content-type|accept)$/i.test(p.name)) {
-        req.headers.push({ name: p.name, value: value });
-      }
+      if (p.in === 'path') req.pathParams.push({ name: p.name, value: value });
+      else if (p.in === 'query') { if (p.required === true || p.example !== undefined) req.query.push({ name: p.name, value: value }); }
+      else if (p.in === 'header' && !/^(authorization|content-type|accept)$/i.test(p.name)) req.headers.push({ name: p.name, value: value });
     });
     req.body = bodyFor(doc, entry.op.requestBody);
     return req;
   }
 
-  /* A request the document knows nothing about — another API in the same
-     scenario, or a call the spec does not cover. */
   function customRequest(url) {
     return {
       id: 'custom-' + Math.random().toString(36).slice(2, 8),
-      on: true,
-      custom: true,
-      weight: 1,
-      method: 'GET',
-      path: '',
-      url: url || '',
-      label: 'GET ' + (url || ''),
-      summary: '',
-      pathParams: [],
-      query: [],
-      headers: [],
-      body: null
+      on: true, custom: true, weight: 1,
+      method: 'GET', path: '', url: url || '',
+      label: 'GET ' + (url || ''), summary: '', tags: [],
+      pathParams: [], query: [], headers: [], body: null
     };
   }
 
   /* ==================================================================
-     2. Writing the .jmx
+     2. Limits — one shape whatever the source (Apigee XML, a known limit)
+     ================================================================== */
+
+  /* cfg.limiter → { quota, spike, codes, identifier, signatureFor } */
+  function resolveLimits(cfg) {
+    var lim = cfg.limiter || { kind: 'none' };
+    var out = {
+      kind: lim.kind || 'none',
+      quota: null,
+      spike: null,
+      policies: [],
+      identifier: { kind: 'proxy', name: null, label: 'the whole proxy' },
+      limitCodes: codesToRegex(lim.limitCodes || '429', '429'),
+      warnings: []
+    };
+    var apigee = root.SduiApigee;
+    if (lim.kind === 'apigee' && apigee) {
+      var parsed = apigee.parse(lim.apigee && lim.apigee.text);
+      out.warnings = parsed.warnings.slice();
+      parsed.policies.forEach(function (p, i) {
+        if (p.enabled === false) return;
+        var values = (lim.apigee && lim.apigee.values && lim.apigee.values[i]) || {};
+        var r = apigee.resolve(p, values, { mps: lim.apigee && lim.apigee.mps });
+        out.policies.push(r);
+        if (r.kind === 'quota' && r.complete && !out.quota) out.quota = r;
+        else if (r.kind === 'spike' && r.complete && !out.spike) out.spike = r;
+      });
+      var withId = out.quota || out.spike;
+      if (withId) out.identifier = withId.identifier;
+    } else if (lim.kind === 'known' && lim.known) {
+      var k = lim.known;
+      var unit = (k.unit || 'minute').toLowerCase();
+      var interval = Math.max(1, Math.round(num(k.interval, 1)));
+      var count = Math.max(1, Math.round(num(k.count, 1)));
+      out.quota = {
+        kind: 'quota',
+        policy: { displayName: 'Documented limit', distributed: true, synchronous: k.exact !== false, startTime: null },
+        complete: true,
+        allow: count,
+        requestsAllowed: count,
+        effectiveAllowed: count,
+        copies: 1,
+        interval: interval,
+        unit: unit,
+        windowSeconds: interval * (UNIT_SECONDS[unit] || 60),
+        type: k.type === 'rolling' ? 'rollingwindow' : (k.type === 'flexi' ? 'flexi' : 'default'),
+        startMs: null,
+        exact: k.exact !== false,
+        identifier: knownIdentifier(k),
+        faultSignature: '',
+        mps: 1
+      };
+      out.identifier = out.quota.identifier;
+    }
+    return out;
+  }
+
+  function knownIdentifier(k) {
+    var per = k.per || 'credential';
+    if (per === 'header') return { kind: 'header', name: k.name || 'X-Client-Id', label: 'the ' + (k.name || 'X-Client-Id') + ' request header' };
+    if (per === 'query') return { kind: 'query', name: k.name || 'client_id', label: 'the ' + (k.name || 'client_id') + ' query parameter' };
+    if (per === 'ip') return { kind: 'ip', name: null, label: 'the client IP' };
+    if (per === 'proxy') return { kind: 'proxy', name: null, label: 'the whole API (one shared counter)' };
+    return { kind: 'credential', name: null, label: 'the calling credential' };
+  }
+
+  function codesToRegex(text, fallback) {
+    var parts = [];
+    String(text || '').split(/[\s,;]+/).forEach(function (c) {
+      c = c.trim().toLowerCase();
+      if (!c) return;
+      if (/^\d{3}$/.test(c)) parts.push(c);
+      else if (/^[1-5]xx$/.test(c)) parts.push(c.charAt(0) + '\\d\\d');
+    });
+    if (!parts.length && fallback) parts.push(fallback);
+    return parts.filter(function (p, i, a) { return a.indexOf(p) === i; });
+  }
+
+  function passRegexParts(checks) {
+    var parts = ['2\\d\\d'];
+    if (checks && checks.allow3xx) parts.push('3\\d\\d');
+    codesToRegex(checks && checks.extraCodes, '').forEach(function (p) { if (parts.indexOf(p) === -1) parts.push(p); });
+    return parts;
+  }
+
+  /* ==================================================================
+     3. Scenarios — what the limiter config says is worth proving
+     ================================================================== */
+
+  function num(v, dflt) {
+    var n = parseFloat(v);
+    return isNaN(n) ? dflt : n;
+  }
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+  function usersFor(rpm) { return clamp(Math.ceil(rpm / 60 * 0.5), 1, 100); }
+  function round1(n) { return Math.round(n * 10) / 10; }
+
+  /* Default parameters for every scenario kind the limits make possible, in
+     the order they should run. The wizard keeps the user's edits where the
+     kind survives a change of limiter. */
+  function suggestScenarios(limits) {
+    var list = [];
+    var q = limits.quota;
+    var s = limits.spike;
+    var ident = limits.identifier;
+    // With a spike arrest in front of the quota, every quota scenario has to
+    // stay under the smoothed rate or it measures the wrong policy.
+    var cap = s ? Math.max(1, Math.floor(s.effectivePerSecond * 60 * 0.5)) : Infinity;
+
+    if (s) {
+      var bucket = s.bucket * s.copies;
+      var size = clamp(bucket * 4 + 10, 20, 500);
+      var refill = Math.ceil(bucket * s.gapMs / 1000) + 1;
+      list.push(scenario('spike-burst', { size: size, bursts: 3, gapSeconds: refill }, true));
+      var secs = Math.max(30, Math.ceil(20 / Math.max(0.01, s.effectivePerSecond)));
+      list.push(scenario('spike-paced', { factor: 0.75, seconds: secs, tolerancePct: 10 }, true));
+      list.push(scenario('spike-over', { factor: 2, seconds: secs }, !q));
+    }
+    if (q) {
+      var allowed = q.effectiveAllowed;
+      var longWindow = q.windowSeconds > 3600;
+      var overshoot = Math.max(5, Math.ceil(allowed * 0.1));
+      var total = allowed + overshoot;
+      // Finish inside a quarter of the window so the counter cannot reset underneath the run.
+      var rpm = Math.min(cap, clamp(Math.ceil(total / Math.max(10, q.windowSeconds / 4) * 60), 60, 6000));
+      var tol = q.exact ? 1 : 5;
+      list.push(scenario('quota-edge', {
+        overshoot: overshoot, rpm: rpm, users: usersFor(rpm), tolerancePct: tol,
+        freshWindow: false, graceSeconds: q.exact ? 3 : 15
+      }, true));
+      if (ident.kind === 'header' || ident.kind === 'query' || ident.kind === 'credential') {
+        list.push(scenario('quota-isolation', { requests: 3 }, true));
+      }
+      list.push(scenario('quota-reset', { requests: 3, graceSeconds: q.exact ? 3 : 15 }, !longWindow));
+      var underRpm = Math.max(1, Math.floor(allowed / q.windowSeconds * 60 * 0.9));
+      list.push(scenario('quota-under', {
+        factor: 0.9, windows: 1, users: usersFor(underRpm), freshWindow: true, graceSeconds: q.exact ? 3 : 15
+      }, !longWindow && q.windowSeconds <= 3600 && underRpm <= cap));
+      var overRpm = Math.max(2, Math.ceil(allowed / q.windowSeconds * 60 * 1.5));
+      list.push(scenario('quota-over', {
+        factor: 1.5, windows: 1, users: usersFor(overRpm), freshWindow: true, graceSeconds: q.exact ? 3 : 15
+      }, false));
+    }
+    if (limits.kind === 'unknown') {
+      list.push(scenario('staircase', { startRpm: 60, stepRpm: 60, steps: 10, stepSeconds: 30, users: 10 }, true));
+    }
+    if (limits.kind === 'none' || !list.length) {
+      list.push(scenario('steady', { rpm: 600, minutes: 5, users: 10, rampup: 10 }, limits.kind === 'none'));
+      list.push(scenario('burst', { size: 50, bursts: 3, gapSeconds: 30 }, false));
+    }
+    return list;
+  }
+
+  function scenario(kind, params, on) {
+    return { kind: kind, on: on !== false, params: params };
+  }
+
+  var KINDS = {
+    'quota-edge': {
+      title: 'Walk up to the quota and over it',
+      why: 'Sends exactly the allowed number of requests plus a few more, fast enough to stay inside one window. The first N must pass and everything after must be refused — this is the proof that the quota is the number the policy says.'
+    },
+    'quota-reset': {
+      title: 'Wait for the window and prove it resets',
+      why: 'Runs after the quota is exhausted: waits until the window turns over, then sends a few requests that must all pass again. Proves the reset happens when the policy type says it does.'
+    },
+    'quota-isolation': {
+      title: 'Another caller is not affected',
+      why: 'Right after the quota is exhausted for one identity, a different identity sends a few requests. They must pass — the counter is per caller, not shared.'
+    },
+    'quota-under': {
+      title: 'Hold a rate just under the quota',
+      why: 'A steady rate that would use 90% of the quota over a full window. Nothing may be refused; a 429 here means the limit is lower than documented, or the counter is shared with other traffic.'
+    },
+    'quota-over': {
+      title: 'Hold a rate over the quota',
+      why: 'A steady rate 1.5× the quota for a full window: the policy must start refusing once the count is used up and let roughly the allowed number through.'
+    },
+    'spike-burst': {
+      title: 'Burst — everything at the same instant',
+      why: 'All threads are released together by a Synchronizing Timer. Spike arrest smooths traffic, so only the burst allowance passes and the rest must be refused — repeated a few times with a pause for the bucket to refill.'
+    },
+    'spike-paced': {
+      title: 'Paced under the rate',
+      why: 'Requests spaced evenly at 75% of the configured rate. Spike arrest must let them through (a few refusals are timing jitter — smoothing rejects anything that arrives early); many refusals mean the real rate is lower, e.g. fewer message processors than assumed.'
+    },
+    'spike-over': {
+      title: 'Paced at twice the rate',
+      why: 'Evenly spaced requests at 2× the rate: about half must be refused. Shows the smoothing in action, not just the burst cut-off.'
+    },
+    'staircase': {
+      title: 'Climb the rate until the limiter answers',
+      why: 'One thread group per step, each holding a higher rate than the last. The first step with refusals is the limit — this is how to find a limit nobody wrote down.'
+    },
+    'steady': {
+      title: 'Steady rate',
+      why: 'A constant rate held for a set time by a Constant Throughput Timer. The baseline load test.'
+    },
+    'burst': {
+      title: 'Bursts',
+      why: 'A number of requests released at the same instant, repeated with a pause between bursts.'
+    }
+  };
+
+  function kindInfo(kind) { return KINDS[kind] || { title: kind, why: '' }; }
+
+  /* The scenario with everything the builder needs worked out: thread
+     counts, loops, rates, the wait before it starts, and the verdict rule. */
+  function planScenario(scn, limits, index, checks) {
+    var p = scn.params || {};
+    var q = limits.quota;
+    var s = limits.spike;
+    var key = 'S' + (index + 1);
+    var info = kindInfo(scn.kind);
+    var out = {
+      key: key, kind: scn.kind, title: info.title, why: info.why,
+      groups: [], seconds: 0, requests: 0, expect: null, expectText: '', notes: []
+    };
+
+    function quotaWait(grace) {
+      if (!q) return null;
+      return { kind: 'window', seconds: q.windowSeconds + grace, expr: windowWaitExpr(q, grace) };
+    }
+    // The rate a few probing requests are sent at: slow, and under any spike
+    // arrest in front of the quota, so they measure the quota and nothing else.
+    var spikeCap = s ? Math.max(1, Math.floor(s.effectivePerSecond * 60 * 0.5)) : Infinity;
+    var probeRpm = Math.min(60, spikeCap);
+    function spikeNote(rpm) {
+      if (s && rpm > spikeCap) {
+        out.notes.push(rpm + ' req/min is above half the spike-arrest rate (' + s.text + '): refusals would come from ' +
+          s.policy.displayName + ', not from the quota. Keep it at or under ' + spikeCap + ' req/min.');
+      }
+    }
+
+    if (scn.kind === 'quota-edge' && q) {
+      var overshoot = Math.max(1, Math.round(num(p.overshoot, 5)));
+      var users = Math.max(1, Math.round(num(p.users, 1)));
+      var total = q.effectiveAllowed + overshoot;
+      var loops = Math.ceil(total / users);
+      total = loops * users;
+      var rpm = Math.max(1, num(p.rpm, 60));
+      var tol = Math.max(0, num(p.tolerancePct, 1)) / 100;
+      var fuzz = Math.ceil(q.effectiveAllowed * tol) + (users > 1 ? users : 0);
+      out.groups.push({
+        name: key + ' — ' + info.title,
+        threads: users, loops: loops, rpm: rpm, mode: 'paced',
+        wait: p.freshWindow ? quotaWait(num(p.graceSeconds, 5)) : null
+      });
+      spikeNote(rpm);
+      out.requests = total;
+      out.seconds = Math.ceil(total / rpm * 60) + (p.freshWindow ? q.windowSeconds : 0);
+      out.expect = {
+        rule: 'edge', passMin: Math.max(0, q.effectiveAllowed - fuzz), passMax: q.effectiveAllowed + fuzz,
+        limitedMin: Math.max(1, total - (q.effectiveAllowed + fuzz)), signature: q.faultSignature
+      };
+      out.expectText = total + ' requests at ' + rpm + ' req/min: the first ' + q.effectiveAllowed +
+        (fuzz ? ' (±' + fuzz + ')' : '') + ' pass, the remaining ' + (total - q.effectiveAllowed) + ' are refused.';
+      if (q.windowSeconds / 3 * rpm / 60 < total) {
+        out.notes.push('At ' + rpm + ' req/min this takes ' + fmtSeconds(total / rpm * 60) + ' — more than a third of the ' +
+          fmtSeconds(q.windowSeconds) + ' window. Raise the rate or the window may reset mid-run.');
+      }
+    } else if (scn.kind === 'quota-reset' && q) {
+      var n = Math.max(1, Math.round(num(p.requests, 3)));
+      out.groups.push({ name: key + ' — ' + info.title, threads: 1, loops: n, mode: 'paced', rpm: probeRpm, wait: quotaWait(num(p.graceSeconds, 5)) });
+      out.requests = n;
+      out.seconds = q.windowSeconds + num(p.graceSeconds, 5) + n;
+      out.expect = { rule: 'all-pass' };
+      out.expectText = 'Waits ' + resetWaitText(q, num(p.graceSeconds, 5)) + ', then ' + n + ' requests that must all pass.';
+    } else if (scn.kind === 'quota-isolation' && q) {
+      var ni = Math.max(1, Math.round(num(p.requests, 3)));
+      out.groups.push({ name: key + ' — ' + info.title, threads: 1, loops: ni, mode: 'paced', rpm: probeRpm, identity: 'other' });
+      out.requests = ni;
+      out.seconds = ni;
+      out.expect = { rule: 'all-pass' };
+      out.expectText = ni + ' requests as ' + limits.identifier.label.replace(/^the /, 'a different ') + ' right after the quota is used up: all must pass.';
+    } else if ((scn.kind === 'quota-under' || scn.kind === 'quota-over') && q) {
+      var factor = Math.max(0.01, num(p.factor, scn.kind === 'quota-under' ? 0.9 : 1.5));
+      var windows = Math.max(0.1, num(p.windows, 1));
+      var secs = Math.ceil(q.windowSeconds * windows);
+      var rate = Math.max(1, Math.round(q.effectiveAllowed / q.windowSeconds * 60 * factor));
+      var u = Math.max(1, Math.round(num(p.users, usersFor(rate))));
+      out.groups.push({
+        name: key + ' — ' + info.title, threads: u, duration: secs, rpm: rate, mode: 'paced',
+        wait: p.freshWindow ? quotaWait(num(p.graceSeconds, 5)) : null
+      });
+      spikeNote(rate);
+      out.requests = Math.round(rate * secs / 60);
+      out.seconds = secs + (p.freshWindow ? q.windowSeconds : 0);
+      if (scn.kind === 'quota-under') {
+        out.expect = { rule: 'none-limited' };
+        out.expectText = rate + ' req/min (' + Math.round(factor * 100) + '% of the quota) for ' + fmtSeconds(secs) + ': nothing may be refused.';
+      } else {
+        var expectPass = Math.ceil(q.effectiveAllowed * windows);
+        var fz = Math.ceil(expectPass * (q.exact ? 0.02 : 0.1)) + u;
+        out.expect = { rule: 'over', passMax: expectPass + fz, limitedMin: 1, signature: q.faultSignature };
+        out.expectText = rate + ' req/min (' + Math.round(factor * 100) + '% of the quota) for ' + fmtSeconds(secs) +
+          ': about ' + expectPass + ' pass, the rest are refused.';
+      }
+    } else if (scn.kind === 'spike-burst' && s) {
+      var size = Math.max(2, Math.round(num(p.size, 20)));
+      var bursts = Math.max(1, Math.round(num(p.bursts, 3)));
+      var gap = Math.max(0, num(p.gapSeconds, 2));
+      out.groups.push({ name: key + ' — ' + info.title, threads: size, loops: bursts, mode: 'burst', gapSeconds: gap });
+      out.requests = size * bursts;
+      out.seconds = bursts * (gap + 1);
+      var allowance = s.bucket * s.copies;
+      out.expect = {
+        rule: 'burst', bursts: bursts, passMaxPerBurst: allowance + Math.max(1, Math.ceil(allowance * 0.5)),
+        signature: s.faultSignature
+      };
+      out.expectText = bursts + ' bursts of ' + size + ' simultaneous requests, ' + gap + ' s apart: about ' + allowance +
+        ' pass per burst' + (s.copies > 1 ? ' (' + s.bucket + ' per message processor)' : '') + ', the rest are refused.';
+    } else if ((scn.kind === 'spike-paced' || scn.kind === 'spike-over') && s) {
+      var f = Math.max(0.01, num(p.factor, scn.kind === 'spike-paced' ? 0.75 : 2));
+      var sec = Math.max(5, Math.round(num(p.seconds, 30)));
+      var rp = Math.max(1, round1(s.effectivePerSecond * 60 * f));
+      var threads = s.gapMs / f >= 300 ? 1 : usersFor(rp);
+      out.groups.push({ name: key + ' — ' + info.title, threads: threads, duration: sec, rpm: rp, mode: 'paced' });
+      out.requests = Math.round(rp * sec / 60);
+      out.seconds = sec;
+      if (scn.kind === 'spike-paced') {
+        var tp = Math.max(0, num(p.tolerancePct, 10));
+        out.expect = { rule: 'mostly-pass', tolerancePct: tp };
+        out.expectText = rp + ' req/min, evenly spaced, for ' + sec + ' s: at most ' + tp + '% refused.';
+      } else {
+        out.expect = { rule: 'ratio', limitedMinPct: 25, limitedMaxPct: 75, signature: s.faultSignature };
+        out.expectText = rp + ' req/min (' + f + '× the rate) for ' + sec + ' s: roughly half refused.';
+      }
+    } else if (scn.kind === 'staircase') {
+      var start = Math.max(1, num(p.startRpm, 60));
+      var step = Math.max(0, num(p.stepRpm, 60));
+      var steps = Math.max(1, Math.round(num(p.steps, 10)));
+      var stepSecs = Math.max(5, Math.round(num(p.stepSeconds, 30)));
+      var su = Math.max(1, Math.round(num(p.users, 10)));
+      for (var i = 0; i < steps; i++) {
+        var r = start + i * step;
+        out.groups.push({ name: key + '.' + (i + 1) + ' — ' + r + ' req/min', step: i + 1, threads: su, duration: stepSecs, rpm: r, mode: 'paced' });
+        out.requests += Math.round(r * stepSecs / 60);
+      }
+      out.seconds = steps * stepSecs;
+      out.expect = { rule: 'staircase', steps: steps, rates: out.groups.map(function (g) { return g.rpm; }) };
+      out.expectText = steps + ' steps of ' + stepSecs + ' s from ' + start + ' to ' + (start + (steps - 1) * step) +
+        ' req/min. The verdict names the first step that was refused.';
+    } else if (scn.kind === 'steady') {
+      var srpm = Math.max(1, num(p.rpm, 600));
+      var mins = Math.max(0.1, num(p.minutes, 5));
+      var sus = Math.max(1, Math.round(num(p.users, 10)));
+      out.groups.push({ name: key + ' — ' + srpm + ' req/min for ' + fmtSeconds(mins * 60), threads: sus, duration: Math.round(mins * 60), rpm: srpm, mode: 'paced', rampup: Math.max(1, Math.round(num(p.rampup, 1))) });
+      out.requests = Math.round(srpm * mins);
+      out.seconds = Math.round(mins * 60);
+      out.expect = { rule: 'no-errors' };
+      out.expectText = srpm + ' req/min held for ' + fmtSeconds(mins * 60) + ' by ' + sus + ' users: no errors other than rate limiting.';
+    } else if (scn.kind === 'burst') {
+      var bs = Math.max(1, Math.round(num(p.size, 50)));
+      var bb = Math.max(1, Math.round(num(p.bursts, 3)));
+      var bg = Math.max(0, num(p.gapSeconds, 30));
+      out.groups.push({ name: key + ' — ' + bs + ' at once × ' + bb, threads: bs, loops: bb, mode: 'burst', gapSeconds: bg });
+      out.requests = bs * bb;
+      out.seconds = bb * (bg + 1);
+      out.expect = { rule: 'no-errors' };
+      out.expectText = bb + ' bursts of ' + bs + ' simultaneous requests: no errors other than rate limiting.';
+    } else {
+      return null;
+    }
+    return out;
+  }
+
+  /* How long to pause before a quota scenario so it starts in a fresh
+     window. Calendar-type windows are aligned to a known instant, so the
+     exact remaining time is computed at run time; the others are measured
+     from the last request, so a full window is the safe wait. */
+  function windowWaitExpr(q, graceSeconds) {
+    // Whole seconds: this becomes the thread group's start-up delay, which
+    // keeps the wait out of the group's own duration.
+    var P = Math.round(q.windowSeconds);
+    var G = Math.round(graceSeconds);
+    var S = null;
+    if (q.type === 'calendar' && q.startMs) S = Math.floor(q.startMs / 1000);
+    else if (q.type === 'default' && /^(second|minute|hour|day)$/.test(q.unit)) S = 0;
+    if (S === null) return String(P + G);
+    // JEXL3 integer arithmetic on seconds; no commas (they would split the function arguments).
+    return '${__jexl3(' + P + ' - ((${__time(/1000)} - ' + S + ') % ' + P + ') + ' + G + ')}';
+  }
+
+  function resetWaitText(q, grace) {
+    if (q.type === 'calendar' && q.startMs) return 'until the next calendar boundary (+' + grace + ' s)';
+    if (q.type === 'default' && /^(second|minute|hour|day)$/.test(q.unit)) return 'until the top of the next ' + q.unit + ' (+' + grace + ' s)';
+    return 'a full window (' + fmtSeconds(q.windowSeconds) + ' + ' + grace + ' s)';
+  }
+
+  function fmtSeconds(s) {
+    s = Math.round(s);
+    if (s < 60) return s + ' s';
+    if (s < 3600) return Math.floor(s / 60) + ' min' + (s % 60 ? ' ' + (s % 60) + ' s' : '');
+    return Math.floor(s / 3600) + ' h' + (s % 3600 ? ' ' + Math.round((s % 3600) / 60) + ' min' : '');
+  }
+
+  /* ==================================================================
+     4. Writing the .jmx
      ================================================================== */
 
   function xmlEsc(s) {
     return String(s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-      // Control characters XML 1.0 cannot carry — JMeter's parser aborts on them.
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  }
+
+  /* A Java/BeanShell string literal. */
+  function jstr(s) {
+    return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '\\n') + '"';
+  }
+
+  function base64(s) {
+    var bytes = [];
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c < 0x80) bytes.push(c);
+      else if (c < 0x800) bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+      else if (c >= 0xd800 && c < 0xdc00 && i + 1 < s.length) {
+        var cp = 0x10000 + ((c - 0xd800) << 10) + (s.charCodeAt(++i) - 0xdc00);
+        bytes.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+      } else bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+    var A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    var out = '';
+    for (var j = 0; j < bytes.length; j += 3) {
+      var n = (bytes[j] << 16) | ((bytes[j + 1] || 0) << 8) | (bytes[j + 2] || 0);
+      out += A[(n >> 18) & 63] + A[(n >> 12) & 63] + (j + 1 < bytes.length ? A[(n >> 6) & 63] : '=') + (j + 2 < bytes.length ? A[n & 63] : '=');
+    }
+    return out;
   }
 
   function Jmx() { this.out = []; this.depth = 0; }
@@ -259,10 +717,7 @@
   };
   Jmx.prototype.open = function (s) { this.line(s); this.depth++; return this; };
   Jmx.prototype.close = function (s) { this.depth--; return this.line(s); };
-  Jmx.prototype.sp = function (n, v) {
-    return this.line('<stringProp name="' + n + '">' +
-      xmlEsc(v === undefined || v === null ? '' : v) + '</stringProp>');
-  };
+  Jmx.prototype.sp = function (n, v) { return this.line('<stringProp name="' + n + '">' + xmlEsc(v === undefined || v === null ? '' : v) + '</stringProp>'); };
   Jmx.prototype.bp = function (n, v) { return this.line('<boolProp name="' + n + '">' + (v ? 'true' : 'false') + '</boolProp>'); };
   Jmx.prototype.ip = function (n, v) { return this.line('<intProp name="' + n + '">' + v + '</intProp>'); };
   Jmx.prototype.lp = function (n, v) { return this.line('<longProp name="' + n + '">' + v + '</longProp>'); };
@@ -270,13 +725,11 @@
   Jmx.prototype.text = function () { return this.out.join('\n') + '\n'; };
 
   function el(w, tag, gui, cls, name, enabled) {
-    return w.open('<' + tag + ' guiclass="' + gui + '" testclass="' + cls + '" testname="' +
-      xmlEsc(name) + '" enabled="' + (enabled === false ? 'false' : 'true') + '">');
+    return w.open('<' + tag + ' guiclass="' + gui + '" testclass="' + cls + '" testname="' + xmlEsc(name) + '" enabled="' + (enabled === false ? 'false' : 'true') + '">');
   }
 
   function httpArgs(w, args, raw) {
-    w.open('<elementProp name="HTTPsampler.Arguments" elementType="Arguments" ' +
-      'guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">');
+    w.open('<elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">');
     var list = raw !== null && raw !== undefined ? [{ name: '', value: raw }] : args;
     if (!list.length) {
       w.line('<collectionProp name="Arguments.arguments"/>');
@@ -311,28 +764,41 @@
     w.leaf();
   }
 
+  function userVars(w, vars, name) {
+    el(w, 'Arguments', 'ArgumentsPanel', 'Arguments', name || 'User Defined Variables', true);
+    w.open('<collectionProp name="Arguments.arguments">');
+    vars.forEach(function (v) {
+      w.open('<elementProp name="' + xmlEsc(v.name) + '" elementType="Argument">');
+      w.sp('Argument.name', v.name);
+      w.sp('Argument.value', v.value);
+      w.sp('Argument.metadata', '=');
+      w.close('</elementProp>');
+    });
+    w.close('</collectionProp>');
+    w.close('</Arguments>');
+    w.leaf();
+  }
+
   function formArgs(text) {
     var out = [];
     String(text).split('&').forEach(function (pair) {
       if (!pair) return;
       var eq = pair.indexOf('=');
-      out.push(eq === -1
-        ? { name: decodeURIComponent(pair), value: '' }
-        : { name: decodeURIComponent(pair.slice(0, eq)), value: decodeURIComponent(pair.slice(eq + 1)) });
+      try {
+        out.push(eq === -1 ? { name: decodeURIComponent(pair), value: '' }
+          : { name: decodeURIComponent(pair.slice(0, eq)), value: decodeURIComponent(pair.slice(eq + 1)) });
+      } catch (e) { out.push({ name: pair, value: '' }); }
     });
     return out;
   }
 
   function loopController(w, loops) {
-    w.open('<elementProp name="ThreadGroup.main_controller" elementType="LoopController" ' +
-      'guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">');
+    w.open('<elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">');
     w.bp('LoopController.continue_forever', false);
     w.sp('LoopController.loops', loops);
     w.close('</elementProp>');
   }
 
-  /* The wizard's answers are substituted in, so the sampler reads like the URL
-     it will actually call. */
   function resolvedPath(req, basePath) {
     if (req.url) {
       var m = String(req.url).match(/^https?:\/\/[^/]+(\/[^?#]*)?/i);
@@ -346,17 +812,15 @@
     return (basePath || '') + path;
   }
 
-  function sampler(w, req, basePath, name) {
-    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy', name || req.label, true);
+  function sampler(w, req, basePath, label, extraQuery, noKeepAlive) {
+    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy', label, true);
     var path = resolvedPath(req, basePath);
     var headers = req.headers.slice();
     var raw = null;
-    var args = req.query.slice();
+    var args = req.query.concat(extraQuery || []);
     var multipart = false;
     if (req.body && req.body.text !== '') {
       if (/multipart/.test(req.body.contentType)) {
-        // JMeter writes the multipart Content-Type itself — it carries the part
-        // boundary — and each field of the body becomes one form part.
         multipart = true;
         args = args.concat(formArgs(asForm(req.body.text)));
       } else if (/x-www-form-urlencoded/.test(req.body.contentType)) {
@@ -365,20 +829,14 @@
       } else {
         headers.push({ name: 'Content-Type', value: req.body.contentType });
         raw = req.body.text;
-        // A raw body takes the argument list over, so query values move into
-        // the path.
         if (args.length) {
-          path += '?' + args.map(function (q) {
-            return encodeURIComponent(q.name) + '=' + encodeURIComponent(q.value);
-          }).join('&');
+          path += '?' + args.map(function (q) { return encodeURIComponent(q.name) + '=' + encodeURIComponent(q.value); }).join('&');
           args = [];
         }
       }
     }
     if (raw !== null) w.bp('HTTPSampler.postBodyRaw', true);
     httpArgs(w, args, raw);
-    // An absolute URL names its own host, which is how one plan can drive two
-    // different APIs at once; everything else inherits the HTTP defaults.
     var abs = req.url ? String(req.url).match(/^(https?):\/\/([^/:?#]+)(?::(\d+))?/i) : null;
     w.sp('HTTPSampler.domain', abs ? abs[2] : '');
     w.sp('HTTPSampler.port', abs ? (abs[3] || '') : '');
@@ -388,7 +846,9 @@
     w.sp('HTTPSampler.method', req.method);
     w.bp('HTTPSampler.follow_redirects', true);
     w.bp('HTTPSampler.auto_redirects', false);
-    w.bp('HTTPSampler.use_keepalive', true);
+    // A connection kept open across a long wait is often closed by the server
+    // in the meantime; a slow probe does not need it.
+    w.bp('HTTPSampler.use_keepalive', !noKeepAlive);
     w.bp('HTTPSampler.DO_MULTIPART_POST', multipart);
     w.sp('HTTPSampler.embedded_url_re', '');
     w.sp('HTTPSampler.connect_timeout', '');
@@ -404,30 +864,13 @@
     }
   }
 
-  /* Which response codes count as a pass. JMeter marks every non-2xx sample
-     failed on its own and a passing assertion cannot undo that, so "Ignore
-     status" resets the result first and the pattern alone decides. */
-  function codePattern(checks) {
-    var parts = ['2\\d\\d'];
-    if (checks.allow3xx) parts.push('3\\d\\d');
-    if (checks.allow429) parts.push('429');
-    String(checks.extraCodes || '').split(/[\s,]+/).forEach(function (c) {
-      if (/^\d{3}$/.test(c) && parts.indexOf(c) === -1) parts.push(c);
-    });
-    return '^(' + parts.join('|') + ')$';
-  }
-
-  function responseAssertion(w, checks) {
-    var names = ['2xx'];
-    if (checks.allow3xx) names.push('3xx');
-    if (checks.allow429) names.push('429 = rate limited');
-    if (checks.extraCodes) names.push(checks.extraCodes);
-    el(w, 'ResponseAssertion', 'AssertionGui', 'ResponseAssertion',
-      'Pass on ' + names.join(', '), true);
+  function responseAssertion(w, passParts, limitParts) {
+    var parts = passParts.concat(limitParts);
+    el(w, 'ResponseAssertion', 'AssertionGui', 'ResponseAssertion', 'Pass on ' + parts.join(', ').replace(/\\d\\d/g, 'xx'), true);
     w.open('<collectionProp name="Asserion.test_strings">');
-    w.sp('0', codePattern(checks));
+    w.sp('0', '^(' + parts.join('|') + ')$');
     w.close('</collectionProp>');
-    w.sp('Assertion.custom_message', 'Unexpected response code — not a success and not a rate limit');
+    w.sp('Assertion.custom_message', 'Neither a success nor a rate-limit answer');
     w.sp('Assertion.test_field', 'Assertion.response_code');
     w.bp('Assertion.assume_success', true);
     w.ip('Assertion.test_type', 1);
@@ -436,10 +879,38 @@
   }
 
   function durationAssertion(w, ms) {
-    el(w, 'DurationAssertion', 'DurationAssertionGui', 'DurationAssertion',
-      'Answer within ' + ms + ' ms', true);
+    el(w, 'DurationAssertion', 'DurationAssertionGui', 'DurationAssertion', 'Answer within ' + ms + ' ms', true);
     w.sp('DurationAssertion.duration', String(ms));
     w.close('</DurationAssertion>');
+    w.leaf();
+  }
+
+  function beanShellPost(w, name, script) {
+    el(w, 'BeanShellPostProcessor', 'TestBeanGUI', 'BeanShellPostProcessor', name, true);
+    w.bp('resetInterpreter', false);
+    w.sp('parameters', '');
+    w.sp('filename', '');
+    w.sp('script', script);
+    w.close('</BeanShellPostProcessor>');
+    w.leaf();
+  }
+
+  function beanShellSampler(w, name, script) {
+    el(w, 'BeanShellSampler', 'BeanShellSamplerGui', 'BeanShellSampler', name, true);
+    w.sp('BeanShellSampler.query', script);
+    w.sp('BeanShellSampler.filename', '');
+    w.sp('BeanShellSampler.parameters', '');
+    w.bp('BeanShellSampler.resetInterpreter', false);
+    w.close('</BeanShellSampler>');
+    w.leaf();
+  }
+
+  function pause(w, name, durationExpr) {
+    el(w, 'TestAction', 'TestActionGui', 'TestAction', name, true);
+    w.ip('ActionProcessor.action', 1);
+    w.ip('ActionProcessor.target', 0);
+    w.sp('ActionProcessor.duration', durationExpr);
+    w.close('</TestAction>');
     w.leaf();
   }
 
@@ -465,26 +936,25 @@
     w.leaf();
   }
 
-  /* The token call, its extractor and the post-processor that shares the value
-     with every thread. Used on its own in a setUp group, or inside the load
-     loop when the token has to be refreshed. */
-  function tokenUrl(cfg) {
-    var url = cfg.auth.login.url;
-    // A path is relative to the base URL, exactly like the other requests; a
-    // full URL calls its own host (token services often live elsewhere).
-    return /^https?:\/\//i.test(url) ? url : (cfg.target.basePath || '') + url;
+  /* ----- the token ----- */
+
+  function tokenUrl(login, target) {
+    var url = login.url;
+    return /^https?:\/\//i.test(url) ? url : (target.basePath || '') + (url.charAt(0) === '/' ? url : '/' + url);
   }
 
-  function tokenRequest(w, cfg) {
-    var login = cfg.auth.login;
-    var url = tokenUrl(cfg);
-    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy',
-      'TOKEN ' + login.method + ' ' + url, true);
+  /* The token call: extractor for the token (and expires_in when present)
+     and the post-processor that hands both to every thread as properties.
+     `slot` is '' for the main identity and '2' for the second one. */
+  function tokenRequest(w, login, target, slot, ttlMinutes) {
+    var url = tokenUrl(login, target);
+    var prop = 'sduiToken' + slot;
+    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy', 'TOKEN' + (slot ? ' #2' : '') + ' ' + login.method + ' ' + url, true);
     var form = /x-www-form-urlencoded/.test(login.contentType);
+    var body = login.body || '';
     if (!form) w.bp('HTTPSampler.postBodyRaw', true);
-    httpArgs(w, form ? formArgs(login.body) : [], form ? null : login.body);
-    var abs = /^https?:\/\//i.test(url)
-      ? url.match(/^(https?):\/\/([^/:?#]+)(?::(\d+))?([^#]*)/i) : null;
+    httpArgs(w, form ? formArgs(body) : [], form ? null : body);
+    var abs = /^https?:\/\//i.test(url) ? url.match(/^(https?):\/\/([^/:?#]+)(?::(\d+))?([^#]*)/i) : null;
     w.sp('HTTPSampler.domain', abs ? abs[2] : '');
     w.sp('HTTPSampler.port', abs ? (abs[3] || '') : '');
     w.sp('HTTPSampler.protocol', abs ? abs[1].toLowerCase() : '');
@@ -498,39 +968,43 @@
     w.sp('HTTPSampler.embedded_url_re', '');
     w.close('</HTTPSamplerProxy>');
     w.open('<hashTree>');
-    headerManager(w, [{ name: 'Content-Type', value: login.contentType },
-      { name: 'Accept', value: 'application/json' }], 'Token request headers');
+    var headers = [{ name: 'Accept', value: 'application/json' }];
+    if (body) headers.push({ name: 'Content-Type', value: login.contentType });
+    if (login.basic && login.basic.on) {
+      headers.push({ name: 'Authorization', value: 'Basic ' + base64((login.basic.id || '') + ':' + (login.basic.secret || '')) });
+    }
+    (login.headers || []).forEach(function (h) { if (h.name) headers.push(h); });
+    headerManager(w, headers, 'Token request headers');
 
-    el(w, 'JSONPostProcessor', 'JSONPostProcessorGui', 'JSONPostProcessor',
-      'Read the token out of the response', true);
-    w.sp('JSONPostProcessor.referenceNames', 'sduiToken');
-    w.sp('JSONPostProcessor.jsonPathExprs', login.jsonPath);
-    w.sp('JSONPostProcessor.match_numbers', '1');
-    w.sp('JSONPostProcessor.defaultValues', 'TOKEN_NOT_FOUND');
+    el(w, 'JSONPostProcessor', 'JSONPostProcessorGui', 'JSONPostProcessor', 'Read the token (and expires_in) out of the response', true);
+    w.sp('JSONPostProcessor.referenceNames', prop + ';' + prop + 'Expires');
+    w.sp('JSONPostProcessor.jsonPathExprs', (login.jsonPath || '$.access_token') + ';' + (login.expiresPath || '$.expires_in'));
+    w.sp('JSONPostProcessor.match_numbers', '1;1');
+    w.sp('JSONPostProcessor.defaultValues', 'TOKEN_NOT_FOUND;NONE');
     w.close('</JSONPostProcessor>');
     w.leaf();
 
-    // BeanShell rather than JSR223/Groovy on purpose: the Groovy bundled with
-    // JMeter 5.4.3 cannot compile under Java 17+, while BeanShell interprets
-    // and runs on every JDK the tool supports.
-    el(w, 'BeanShellPostProcessor', 'TestBeanGUI', 'BeanShellPostProcessor',
-      'Share the token with every thread', true);
-    w.bp('resetInterpreter', false);
-    w.sp('parameters', '');
-    w.sp('filename', '');
-    w.sp('script',
+    beanShellPost(w, 'Share the token with every thread',
       '// A variable belongs to one thread; a property is what all of them read.\n' +
-      'props.put("sduiToken", vars.get("sduiToken"));\n' +
-      'props.put("sduiTokenAt", String.valueOf(System.currentTimeMillis()));\n' +
-      'log.info("token acquired: " + vars.get("sduiToken"));');
-    w.close('</BeanShellPostProcessor>');
-    w.leaf();
+      'String t = vars.get(' + jstr(prop) + ');\n' +
+      'props.put(' + jstr(prop) + ', t);\n' +
+      'props.put(' + jstr(prop + 'At') + ', String.valueOf(System.currentTimeMillis()));\n' +
+      'String exp = vars.get(' + jstr(prop + 'Expires') + ');\n' +
+      'long ttl = ' + Math.round(Math.max(1, ttlMinutes || 30) * 60000) + 'L;\n' +
+      'if (exp != null && !exp.equals("NONE") && exp.trim().length() > 0) { try { ttl = Long.parseLong(exp.trim()) * 900L; } catch (Exception e) {} }\n' +
+      'props.put(' + jstr(prop + 'Ttl') + ', String.valueOf(ttl));\n' +
+      'if (t == null || t.equals("TOKEN_NOT_FOUND")) {\n' +
+      '  log.error("TOKEN' + (slot ? ' #2' : '') + ': no token in the response — check the JSON path and the credentials. Status " + prev.getResponseCode());\n' +
+      '  System.out.println("TOKEN' + (slot ? ' #2' : '') + ' FAILED: " + prev.getResponseCode() + " " + prev.getResponseDataAsString());\n' +
+      '} else {\n' +
+      '  log.info("TOKEN' + (slot ? ' #2' : '') + ' acquired, valid for about " + (ttl / 60000) + " min");\n' +
+      '  System.out.println("TOKEN' + (slot ? ' #2' : '') + ' acquired (" + t.length() + " chars), valid for about " + (ttl / 60000) + " min");\n' +
+      '}');
     w.close('</hashTree>');
   }
 
-  function setupTokenGroup(w, cfg) {
-    el(w, 'SetupThreadGroup', 'SetupThreadGroupGui', 'SetupThreadGroup',
-      'setUp — fetch a token before the load starts', true);
+  function setupTokenGroup(w, cfg, target, withSecond) {
+    el(w, 'SetupThreadGroup', 'SetupThreadGroupGui', 'SetupThreadGroup', 'setUp — fetch the token once, before any load', true);
     w.sp('ThreadGroup.on_sample_error', 'stoptest');
     loopController(w, '1');
     w.sp('ThreadGroup.num_threads', '1');
@@ -540,254 +1014,151 @@
     w.sp('ThreadGroup.delay', '');
     w.close('</SetupThreadGroup>');
     w.open('<hashTree>');
-    tokenRequest(w, cfg);
+    tokenRequest(w, cfg.auth.login, target, '', cfg.auth.ttlMinutes);
+    if (withSecond) tokenRequest(w, cfg.auth.login2, target, '2', cfg.auth.ttlMinutes);
     w.close('</hashTree>');
   }
 
-  /* Refresh inside the loop. One thread at a time enters the critical section,
-     and the If Controller keeps the call from happening when the token is
-     still young — so a 30-minute token is fetched twice in an hour, not once
-     per iteration. */
-  function refreshBlock(w, cfg) {
-    var ttlMs = Math.max(1, Math.round(cfg.auth.ttlMinutes * 60000));
-    el(w, 'CriticalSectionController', 'CriticalSectionControllerGui', 'CriticalSectionController',
-      'Only one thread refreshes the token', true);
+  function refreshBlock(w, cfg, target) {
+    el(w, 'CriticalSectionController', 'CriticalSectionControllerGui', 'CriticalSectionController', 'Only one thread refreshes the token', true);
     w.sp('CriticalSectionController.lockName', 'sdui_token');
     w.close('</CriticalSectionController>');
     w.open('<hashTree>');
-    el(w, 'IfController', 'IfControllerPanel', 'IfController',
-      'Token older than ' + cfg.auth.ttlMinutes + ' min?', true);
-    // JEXL3 reads the property and coerces it for the comparison; no commas,
-    // they would split the function's argument list. __time() is the clock.
+    el(w, 'IfController', 'IfControllerPanel', 'IfController', 'Token expired?', true);
     w.sp('IfController.condition',
-      '${__jexl3(props.get("sduiTokenAt") == null || ' +
-      '${__time()} - props.get("sduiTokenAt") > ' + ttlMs + ')}');
+      '${__jexl3(props.get("sduiTokenAt") == null || ${__time()} - props.get("sduiTokenAt") > ${__P(sduiTokenTtl,' + Math.round(cfg.auth.ttlMinutes * 60000) + ')})}');
     w.bp('IfController.evaluateAll', false);
     w.bp('IfController.useExpression', true);
     w.close('</IfController>');
     w.open('<hashTree>');
-    tokenRequest(w, cfg);
+    tokenRequest(w, cfg.auth.login, target, '', cfg.auth.ttlMinutes);
     w.close('</hashTree>');
     w.close('</hashTree>');
   }
 
-  /* ==================================================================
-     3. The plan
-     ================================================================== */
+  /* ----- counting ----- */
 
-  function activeRequests(cfg) {
-    return cfg.requests.filter(function (r) { return r.on; });
+  /* Every sample of a scenario is sorted into pass / limited / other and
+     counted in AtomicLongs kept in JMeter properties (shared by all threads,
+     surviving the thread group). For Apigee, the fault body says which
+     policy answered. */
+  function classifierScript(key, passParts, limitParts, signatures) {
+    return [
+      'import java.util.concurrent.atomic.AtomicLong;',
+      'String label = prev.getSampleLabel();',
+      'if (label != null && !label.startsWith("TOKEN")) {',
+      '  String base = ' + jstr('sdui.' + key + '.') + ';',
+      '  String code = String.valueOf(prev.getResponseCode());',
+      '  String cls = code.matches(' + jstr('^(' + passParts.join('|') + ')$') + ') ? "pass"',
+      '    : (code.matches(' + jstr('^(' + limitParts.join('|') + ')$') + ') ? "limited" : "other");',
+      '  props.putIfAbsent(base + "total", new AtomicLong(0));',
+      '  props.putIfAbsent(base + cls, new AtomicLong(0));',
+      '  long n = ((AtomicLong) props.get(base + "total")).incrementAndGet();',
+      '  ((AtomicLong) props.get(base + cls)).incrementAndGet();',
+      '  props.putIfAbsent(base + "firstAt", String.valueOf(prev.getStartTime()));',
+      '  props.put(base + "lastAt", String.valueOf(prev.getEndTime()));',
+      '  if (cls.equals("pass")) props.put(base + "lastPass", String.valueOf(n));',
+      '  if (cls.equals("limited")) {',
+      '    props.putIfAbsent(base + "firstLimited", String.valueOf(n));',
+      signatures.map(function (sig) {
+        return '    if (prev.getResponseDataAsString().indexOf(' + jstr(sig) + ') >= 0) { props.putIfAbsent(base + "sig." + ' + jstr(sig) + ', new AtomicLong(0)); ((AtomicLong) props.get(base + "sig." + ' + jstr(sig) + ')).incrementAndGet(); }';
+      }).join('\n'),
+      '  } else if (cls.equals("other")) {',
+      '    props.putIfAbsent(base + "firstOther", code + " " + prev.getResponseMessage());',
+      '  }',
+      '}'
+    ].join('\n');
   }
 
-  function weightsOf(cfg) {
-    var active = activeRequests(cfg);
-    var total = 0;
-    active.forEach(function (r) { total += Math.max(0, r.weight || 0); });
-    if (!total) return active.map(function () { return Math.round(1000 / active.length) / 10; });
-    return active.map(function (r) {
-      return Math.round((Math.max(0, r.weight || 0) / total) * 1000) / 10;
-    });
-  }
-
-  function rampSteps(cfg) {
-    var steps = [];
-    for (var i = 0; i < cfg.ramp.steps; i++) {
-      steps.push({
-        index: i + 1,
-        rpm: cfg.ramp.startRpm + i * cfg.ramp.stepRpm,
-        seconds: cfg.ramp.stepSeconds,
-        delay: i * cfg.ramp.stepSeconds
+  /* The verdict for one scenario: reads the counters and decides. */
+  function verdictScript(scn, limits) {
+    var e = scn.expect;
+    var keys = scn.kind === 'staircase' ? scn.groups.map(function (g) { return scn.key + '.' + g.step; }) : [scn.key];
+    var lines = [
+      'import java.util.concurrent.atomic.AtomicLong;',
+      'long g(String k) { Object o = props.get(k); return o == null ? 0L : ((AtomicLong) o).get(); }',
+      'String s(String k) { Object o = props.get(k); return o == null ? "-" : String.valueOf(o); }',
+      'StringBuilder d = new StringBuilder();',
+      'boolean ok = true;',
+      'String summary = "";'
+    ];
+    if (scn.kind === 'staircase') {
+      lines.push('int firstStep = 0; String firstRate = ""; long totalAll = 0;');
+      lines.push('String[] rates = ' + '{' + scn.groups.map(function (g) { return jstr(String(g.rpm)); }).join(', ') + '};');
+      keys.forEach(function (k, i) {
+        lines.push('{ String b = ' + jstr('sdui.' + k + '.') + '; long p = g(b + "pass"), l = g(b + "limited"), o = g(b + "other"), t = g(b + "total"); totalAll += t;');
+        lines.push('  d.append("step ' + (i + 1) + ' @ " + rates[' + i + '] + " req/min: " + t + " sent, " + p + " pass, " + l + " limited, " + o + " other\\n");');
+        lines.push('  if (l > 0 && firstStep == 0) { firstStep = ' + (i + 1) + '; firstRate = rates[' + i + ']; } }');
       });
-    }
-    return steps;
-  }
-
-  function totalRequests(cfg) {
-    if (cfg.mode === 'spike') return cfg.spike.burst * cfg.spike.bursts;
-    if (cfg.mode === 'quota') return Math.round(cfg.quota.rpm * cfg.quota.minutes);
-    var sum = 0;
-    rampSteps(cfg).forEach(function (s) { sum += s.rpm * s.seconds / 60; });
-    return Math.round(sum);
-  }
-
-  function forHowLong(minutes) {
-    if (minutes < 1) return Math.round(minutes * 60) + ' seconds';
-    if (minutes >= 60 && minutes % 60 === 0) {
-      return (minutes / 60) + ' hour' + (minutes === 60 ? '' : 's');
-    }
-    return minutes + ' minute' + (minutes === 1 ? '' : 's');
-  }
-
-  function userCount(n) { return n + ' virtual user' + (n === 1 ? '' : 's'); }
-
-  function describeRequests(cfg) {
-    var active = activeRequests(cfg);
-    if (!active.length) return 'nothing (no request is selected)';
-    if (active.length === 1) return active[0].label;
-    var pct = weightsOf(cfg);
-    if (cfg.mix === 'weighted') {
-      return active.length + ' requests mixed by share (' + active.map(function (r, i) {
-        return pct[i] + '% ' + r.label;
-      }).join(', ') + ')';
-    }
-    return active.length + ' requests in order (' + active.map(function (r) { return r.label; }).join(' → ') + ')';
-  }
-
-  function describeAuth(cfg) {
-    var a = cfg.auth;
-    if (a.kind === 'none') return 'No credential is sent.';
-    if (a.kind === 'csv') {
-      return 'Every iteration takes the next credential from ' + a.csv.file +
-        ', so a per-key limit is spread over the whole file.';
-    }
-    if (a.kind === 'static') return 'Each request carries the ' + a.header + ' header you supplied.';
-    var when = a.refresh === 'iteration'
-      ? 'before every iteration, so the token endpoint carries the same load as the API'
-      : a.refresh === 'expiry'
-        ? 'once at the start and again whenever it is older than ' + a.ttlMinutes + ' minute' +
-          (a.ttlMinutes === 1 ? '' : 's') + ', one thread at a time'
-        : 'once before the load starts';
-    return 'A token is fetched from ' + a.login.method + ' ' + a.login.url +
-      ' ' + when + '. It travels in the ' + a.header + ' header.';
-  }
-
-  function describeLoad(cfg) {
-    if (cfg.mode === 'spike') {
-      return cfg.spike.bursts === 1
-        ? cfg.spike.burst + ' requests fired at the same instant'
-        : cfg.spike.bursts + ' bursts of ' + cfg.spike.burst + ' simultaneous requests, ' +
-          cfg.spike.gap + ' s apart (' + totalRequests(cfg) + ' requests in total)';
-    }
-    if (cfg.mode === 'quota') {
-      return cfg.quota.rpm + ' requests per minute held for ' + forHowLong(cfg.quota.minutes) +
-        ' by ' + userCount(cfg.quota.users) + ' (' + totalRequests(cfg) + ' requests in total)';
-    }
-    var steps = rampSteps(cfg);
-    var last = steps[steps.length - 1];
-    return steps.length + ' steps of ' + cfg.ramp.stepSeconds + ' s, climbing from ' +
-      cfg.ramp.startRpm + ' to ' + (last ? last.rpm : cfg.ramp.startRpm) + ' requests per minute (' +
-      totalRequests(cfg) + ' requests in total)';
-  }
-
-  function summarize(cfg) {
-    var parts = [describeLoad(cfg) + ' against ' + describeRequests(cfg) + '.'];
-    parts.push(describeAuth(cfg));
-    if (cfg.think.delay || cfg.think.range) {
-      parts.push('Each thread waits ' + cfg.think.delay +
-        (cfg.think.range ? '–' + (cfg.think.delay + cfg.think.range) : '') + ' ms between requests.');
-    }
-    if (cfg.checks.maxMs) parts.push('A response slower than ' + cfg.checks.maxMs + ' ms fails.');
-    return parts.join(' ');
-  }
-
-  function planTitle(doc, cfg) {
-    var name = (doc.info && doc.info.title) || 'API';
-    if (cfg.mode === 'spike') return name + ' — spike arrest test';
-    if (cfg.mode === 'quota') return name + ' — quota / rate limit test';
-    return name + ' — ramp until the limit answers';
-  }
-
-  function csvDataSet(w, cfg) {
-    el(w, 'CSVDataSet', 'TestBeanGUI', 'CSVDataSet', 'Credentials from ' + cfg.auth.csv.file, true);
-    w.sp('filename', cfg.auth.csv.file);
-    w.sp('fileEncoding', 'UTF-8');
-    w.sp('variableNames', cfg.auth.csv.variable);
-    w.bp('ignoreFirstLine', false);
-    w.sp('delimiter', ',');
-    w.bp('quotedData', false);
-    w.bp('recycle', true);
-    w.bp('stopThread', false);
-    w.sp('shareMode', 'shareMode.all');
-    w.close('</CSVDataSet>');
-    w.leaf();
-  }
-
-  function authHeader(cfg) {
-    var a = cfg.auth;
-    if (a.kind === 'none') return null;
-    if (a.kind === 'csv') return { name: a.header, value: a.prefix + '${' + a.csv.variable + '}' };
-    if (a.kind === 'static') {
-      return { name: a.header, value: a.prefix + '${__P(token,' + (a.value || 'PASTE_YOUR_TOKEN') + ')}' };
-    }
-    return { name: a.header, value: a.prefix + '${__P(sduiToken,NO_TOKEN)}' };
-  }
-
-  function throughputController(w, req, percent, basePath) {
-    el(w, 'ThroughputController', 'ThroughputControllerGui', 'ThroughputController',
-      percent + '% — ' + req.label, true);
-    // style 1 = percent of executions, shared across all threads.
-    w.ip('ThroughputController.style', 1);
-    w.bp('ThroughputController.perThread', false);
-    w.ip('ThroughputController.maxThroughput', 1);
-    w.sp('ThroughputController.percentThroughput', String(percent));
-    w.close('</ThroughputController>');
-    w.open('<hashTree>');
-    sampler(w, req, basePath);
-    w.close('</hashTree>');
-  }
-
-  /* Everything that hangs under a thread group. Identical for every step of a
-     ramp, so the steps differ only in their rate and start delay. */
-  function loadBody(w, cfg, rpm) {
-    if (cfg.mode === 'spike') {
-      // Every thread waits at the timer and they are released together — that
-      // is the burst a spike arrest is meant to cut off.
-      el(w, 'SyncTimer', 'TestBeanGUI', 'SyncTimer',
-        'Release all ' + cfg.spike.burst + ' requests together', true);
-      w.ip('groupSize', cfg.spike.burst);
-      w.lp('timeoutInMs', 60000);
-      w.close('</SyncTimer>');
-      w.leaf();
+      lines.push('if (totalAll == 0) { ok = false; summary = "nothing was sent"; }');
+      lines.push('else if (firstStep == 0) summary = "no step was refused — the limit is above " + rates[rates.length - 1] + " req/min";');
+      lines.push('else summary = "first refusals at step " + firstStep + " (" + firstRate + " req/min)";');
     } else {
-      el(w, 'ConstantThroughputTimer', 'TestBeanGUI', 'ConstantThroughputTimer',
-        'Hold the rate at ' + rpm + ' requests per minute', true);
-      // 2 = the rate applies to all active threads in this thread group.
-      w.ip('calcMode', 2);
-      w.sp('throughput', cfg.mode === 'quota' ? '${__P(rpm,' + rpm + ')}' : String(rpm));
-      w.close('</ConstantThroughputTimer>');
-      w.leaf();
-    }
-
-    if (cfg.think.delay || cfg.think.range) {
-      el(w, 'UniformRandomTimer', 'UniformRandomTimerGui', 'UniformRandomTimer',
-        'Think time ' + cfg.think.delay + '–' + (cfg.think.delay + cfg.think.range) + ' ms', true);
-      w.sp('ConstantTimer.delay', String(cfg.think.delay));
-      w.sp('RandomTimer.range', String(cfg.think.range));
-      w.close('</UniformRandomTimer>');
-      w.leaf();
-    }
-
-    responseAssertion(w, cfg.checks);
-    if (cfg.checks.maxMs) durationAssertion(w, cfg.checks.maxMs);
-
-    if (cfg.auth.kind === 'login') {
-      if (cfg.auth.refresh === 'expiry') refreshBlock(w, cfg);
-      else if (cfg.auth.refresh === 'iteration') tokenRequest(w, cfg);
-    }
-
-    var active = activeRequests(cfg);
-    var percents = weightsOf(cfg);
-    active.forEach(function (req, i) {
-      if (cfg.mix === 'weighted' && active.length > 1) {
-        throughputController(w, req, percents[i], cfg.target.basePath);
-      } else {
-        sampler(w, req, cfg.target.basePath);
+      lines.push('String b = ' + jstr('sdui.' + scn.key + '.') + ';');
+      lines.push('long pass = g(b + "pass"), lim = g(b + "limited"), other = g(b + "other"), total = g(b + "total");');
+      lines.push('d.append(total + " sent: " + pass + " pass, " + lim + " limited, " + other + " other\\n");');
+      lines.push('if (lim > 0) d.append("first limited answer was request #" + s(b + "firstLimited") + ", last pass was #" + s(b + "lastPass") + "\\n");');
+      lines.push('if (other > 0) d.append("first unexpected answer: " + s(b + "firstOther") + "\\n");');
+      if (e.signature) {
+        lines.push('long sig = g(b + "sig." + ' + jstr(e.signature) + ');');
+        lines.push('if (lim > 0) d.append(sig + " of the limited answers carry " + ' + jstr(e.signature) + ' + "\\n");');
       }
-    });
-
-    if (cfg.mode === 'spike' && cfg.spike.bursts > 1 && cfg.spike.gap > 0) {
-      el(w, 'TestAction', 'TestActionGui', 'TestAction',
-        'Wait ' + cfg.spike.gap + ' s before the next burst', true);
-      w.ip('ActionProcessor.action', 1);
-      w.ip('ActionProcessor.target', 0);
-      w.sp('ActionProcessor.duration', String(Math.round(cfg.spike.gap * 1000)));
-      w.close('</TestAction>');
-      w.leaf();
+      (limits.policies || []).forEach(function (p) {
+        if (p.faultSignature && p.faultSignature !== e.signature) {
+          lines.push('{ long x = g(b + "sig." + ' + jstr(p.faultSignature) + '); if (x > 0) d.append(x + " limited answers came from " + ' + jstr(p.policy.displayName + ' (' + p.faultSignature + ')') + ' + " instead\\n"); }');
+        }
+      });
+      lines.push('if (total == 0) { ok = false; summary = "nothing was sent"; }');
+      var cond, text;
+      if (e.rule === 'edge') {
+        cond = 'pass >= ' + e.passMin + ' && pass <= ' + e.passMax + ' && lim >= ' + e.limitedMin + ' && other == 0';
+        text = '"expected " + ' + jstr(e.passMin === e.passMax ? String(e.passMin) : e.passMin + '-' + e.passMax) + ' + " to pass and at least ' + e.limitedMin + ' to be limited; got " + pass + " pass / " + lim + " limited / " + other + " other"';
+      } else if (e.rule === 'all-pass') {
+        cond = 'pass == total';
+        text = '"expected every request to pass; got " + pass + " of " + total + " (" + lim + " limited, " + other + " other)"';
+      } else if (e.rule === 'none-limited') {
+        cond = 'lim == 0 && other == 0';
+        text = '"expected no refusals; got " + lim + " limited and " + other + " other out of " + total';
+      } else if (e.rule === 'over') {
+        cond = 'pass <= ' + e.passMax + ' && lim >= ' + e.limitedMin + ' && other == 0';
+        text = '"expected at most ' + e.passMax + ' to pass and the rest limited; got " + pass + " pass / " + lim + " limited / " + other + " other"';
+      } else if (e.rule === 'burst') {
+        cond = 'pass >= 1 && pass <= ' + (e.passMaxPerBurst * e.bursts) + ' && lim >= 1 && other == 0';
+        text = '"expected 1-' + (e.passMaxPerBurst * e.bursts) + ' to pass over ' + e.bursts + ' bursts and the rest limited; got " + pass + " pass / " + lim + " limited / " + other + " other"';
+      } else if (e.rule === 'mostly-pass') {
+        cond = 'lim * 100 <= total * ' + e.tolerancePct + ' && other == 0';
+        text = '"expected at most ' + e.tolerancePct + '% refused; got " + lim + " limited out of " + total + " (" + other + " other)"';
+      } else if (e.rule === 'ratio') {
+        cond = 'lim * 100 >= total * ' + e.limitedMinPct + ' && lim * 100 <= total * ' + e.limitedMaxPct + ' && other == 0';
+        text = '"expected ' + e.limitedMinPct + '-' + e.limitedMaxPct + '% refused; got " + lim + " of " + total + " (" + other + " other)"';
+      } else {
+        cond = 'other == 0';
+        text = '"expected no errors other than rate limiting; got " + other + " other, " + lim + " limited, " + pass + " pass of " + total';
+      }
+      if (e.signature) {
+        cond = '(' + cond + ') && (lim == 0 || sig > 0)';
+      }
+      lines.push('if (total > 0) { ok = ' + cond + '; summary = ' + text + '; }');
+      if (e.signature) {
+        lines.push('if (total > 0 && lim > 0 && sig == 0) summary = summary + " - none of the limited answers mention ' + e.signature + ', so another limiter answered";');
+      }
     }
+    lines.push('String line = "VERDICT " + ' + jstr(scn.key + ' ') + ' + (ok ? "PASS" : "FAIL") + " - " + ' + jstr(scn.title.replace(/\s+—\s+/g, ' - ')) + ' + ": " + summary;');
+    lines.push('System.out.println(line);');
+    lines.push('System.out.println(d.toString());');
+    lines.push('log.info(line);');
+    // The BeanShell sampler copies these three script variables into the result.
+    lines.push('IsSuccess = ok;');
+    lines.push('ResponseCode = ok ? "PASS" : "FAIL";');
+    lines.push('ResponseMessage = summary;');
+    lines.push('return line + "\\n" + d.toString();');
+    return lines.join('\n');
   }
 
-  function threadGroup(w, cfg, spec) {
-    el(w, 'ThreadGroup', 'ThreadGroupGui', 'ThreadGroup', spec.name, true);
+  /* ----- groups ----- */
+
+  function threadGroupHead(w, tag, gui, name, spec) {
+    el(w, tag, gui, tag, name, true);
     w.sp('ThreadGroup.on_sample_error', 'continue');
     loopController(w, spec.loops);
     w.sp('ThreadGroup.num_threads', spec.threads);
@@ -796,70 +1167,241 @@
     w.sp('ThreadGroup.duration', spec.duration);
     w.sp('ThreadGroup.delay', spec.delay);
     w.bp('ThreadGroup.same_user_on_next_iteration', true);
-    w.close('</ThreadGroup>');
+    w.close('</' + tag + '>');
+  }
+
+  function scenarioGroup(w, ctx, scn, g) {
+    var cfg = ctx.cfg;
+    // A wait for a fresh window is the group's start-up delay, so a timed
+    // group still gets its full duration after the window turns over.
+    // The scheduler refuses a zero duration, so a loop-counted group that
+    // waits gets a generous ceiling: it still ends when its loops are done.
+    var spec = {
+      threads: String(g.threads),
+      loops: g.duration ? '-1' : String(g.loops),
+      ramp: String(g.rampup || 1),
+      scheduler: !!g.duration || !!g.wait,
+      duration: g.duration ? String(g.duration) : (g.wait ? '3600' : ''),
+      delay: g.wait ? g.wait.expr : ''
+    };
+    threadGroupHead(w, 'ThreadGroup', 'ThreadGroupGui', g.name, spec);
     w.open('<hashTree>');
-    loadBody(w, cfg, spec.rpm);
+
+    // Headers for this scenario: Accept, the credential, the identifier.
+    var headers = [{ name: 'Accept', value: 'application/json' }];
+    var ident = ctx.limits.identifier;
+    // "The other caller" is a second credential only when the counter is per
+    // credential; otherwise it is the same credential with another identifier.
+    var otherCred = g.identity === 'other' && ident.kind === 'credential';
+    var auth = authHeader(cfg, otherCred);
+    if (auth) headers.push(auth);
+    var extraQuery = [];
+    var idc = cfg.limiter.identifier || {};
+    var identValue = g.identity === 'other' ? idc.other : idc.value;
+    if (ident.kind === 'header' && ident.name && identValue) headers.push({ name: ident.name, value: identValue });
+    if (ident.kind === 'query' && ident.name && identValue) extraQuery.push({ name: ident.name, value: identValue });
+    if (cfg.auth.kind === 'static' && ctx.authOf.queryName) {
+      extraQuery.push({ name: ctx.authOf.queryName, value: otherCred ? '${__P(token2,' + (cfg.auth.value2 || 'SECOND_KEY') + ')}' : '${__P(token,' + (cfg.auth.value || 'PASTE_YOUR_TOKEN') + ')}' });
+    }
+    headerManager(w, headers, 'Headers for ' + scn.key);
+
+    if (g.mode === 'burst') {
+      el(w, 'SyncTimer', 'TestBeanGUI', 'SyncTimer', 'Release all ' + g.threads + ' requests together', true);
+      w.ip('groupSize', g.threads);
+      w.lp('timeoutInMs', 60000);
+      w.close('</SyncTimer>');
+      w.leaf();
+    } else if (g.mode === 'paced') {
+      el(w, 'ConstantThroughputTimer', 'TestBeanGUI', 'ConstantThroughputTimer', 'Hold ' + g.rpm + ' requests per minute', true);
+      // 4 = all active threads in this group, shared schedule: evenly spaced requests.
+      w.ip('calcMode', 4);
+      w.sp('throughput', String(g.rpm));
+      w.close('</ConstantThroughputTimer>');
+      w.leaf();
+    }
+    if (g.mode !== 'burst' && cfg.think && (cfg.think.delay || cfg.think.range)) {
+      el(w, 'UniformRandomTimer', 'UniformRandomTimerGui', 'UniformRandomTimer', 'Think time ' + cfg.think.delay + '–' + (cfg.think.delay + cfg.think.range) + ' ms', true);
+      w.sp('ConstantTimer.delay', String(cfg.think.delay));
+      w.sp('RandomTimer.range', String(cfg.think.range));
+      w.close('</UniformRandomTimer>');
+      w.leaf();
+    }
+
+    responseAssertion(w, ctx.passParts, ctx.limits.limitCodes);
+    if (cfg.checks.maxMs) durationAssertion(w, cfg.checks.maxMs);
+    var countKey = g.step ? scn.key + '.' + g.step : scn.key;
+    beanShellPost(w, 'Count pass / limited / other for ' + countKey,
+      classifierScript(countKey, ctx.passParts, ctx.limits.limitCodes, ctx.signatures));
+    if (cfg.checks.rateHeader) {
+      el(w, 'RegexExtractor', 'RegexExtractorGui', 'RegexExtractor', 'Read ' + cfg.checks.rateHeader + ' from the response headers', true);
+      w.sp('RegexExtractor.useHeaders', 'true');
+      w.sp('RegexExtractor.refname', 'rateHeader');
+      w.sp('RegexExtractor.regex', '(?i)' + cfg.checks.rateHeader.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\s*(\\S+)');
+      w.sp('RegexExtractor.template', '$1$');
+      w.sp('RegexExtractor.default', '');
+      w.sp('RegexExtractor.match_number', '1');
+      w.close('</RegexExtractor>');
+      w.leaf();
+    }
+
+    if (cfg.auth.kind === 'login' && g.identity !== 'other') {
+      if (cfg.auth.refresh === 'expiry') refreshBlock(w, cfg, ctx.target);
+      else if (cfg.auth.refresh === 'iteration') tokenRequest(w, cfg.auth.login, ctx.target, '', cfg.auth.ttlMinutes);
+    }
+
+    var active = ctx.active;
+    var percents = weightsOf(active);
+    var slow = !!g.wait || (g.rpm && g.rpm <= 60);
+    active.forEach(function (req, i) {
+      var label = '[' + countKey + '] ' + req.label;
+      if (cfg.mix === 'weighted' && active.length > 1) {
+        el(w, 'ThroughputController', 'ThroughputControllerGui', 'ThroughputController', percents[i] + '% — ' + req.label, true);
+        w.ip('ThroughputController.style', 1);
+        w.bp('ThroughputController.perThread', false);
+        w.ip('ThroughputController.maxThroughput', 1);
+        w.sp('ThroughputController.percentThroughput', String(percents[i]));
+        w.close('</ThroughputController>');
+        w.open('<hashTree>');
+        sampler(w, req, ctx.target.basePath, label, extraQuery, slow);
+        w.close('</hashTree>');
+      } else {
+        sampler(w, req, ctx.target.basePath, label, extraQuery, slow);
+      }
+    });
+
+    if (g.mode === 'burst' && g.loops > 1 && g.gapSeconds > 0) {
+      pause(w, 'Wait ' + g.gapSeconds + ' s before the next burst', String(Math.round(g.gapSeconds * 1000)));
+    }
     w.close('</hashTree>');
   }
 
+  function weightsOf(active) {
+    var total = 0;
+    active.forEach(function (r) { total += Math.max(0, r.weight || 0); });
+    if (!total) return active.map(function () { return Math.round(1000 / active.length) / 10; });
+    return active.map(function (r) { return Math.round((Math.max(0, r.weight || 0) / total) * 1000) / 10; });
+  }
+
+  function authHeader(cfg, other) {
+    var a = cfg.auth;
+    if (a.kind === 'none') return null;
+    if (a.kind === 'csv') return { name: a.header, value: a.prefix + '${' + a.csv.variable + '}' };
+    if (a.kind === 'static') {
+      if (cfg.authQueryName) return null;
+      return other
+        ? { name: a.header, value: a.prefix + '${__P(token2,' + (a.value2 || 'SECOND_KEY') + ')}' }
+        : { name: a.header, value: a.prefix + '${__P(token,' + (a.value || 'PASTE_YOUR_TOKEN') + ')}' };
+    }
+    return { name: a.header, value: a.prefix + '${__P(sduiToken' + (other ? '2' : '') + ',NO_TOKEN)}' };
+  }
+
+  /* ==================================================================
+     5. The plan
+     ================================================================== */
+
+  function activeRequests(cfg) { return (cfg.requests || []).filter(function (r) { return r.on; }); }
+
+  /* Everything the review step shows: scenarios with their numbers, total
+     time, warnings — without writing XML. */
+  function estimate(cfg) {
+    var limits = resolveLimits(cfg);
+    var scns = [];
+    var seconds = 0;
+    var requests = 0;
+    var problems = [];
+    (cfg.scenarios || []).forEach(function (s) {
+      if (!s.on) return;
+      var p = planScenario(s, limits, scns.length, cfg.checks);
+      if (!p) return;
+      scns.push(p);
+      seconds += p.seconds;
+      requests += p.requests;
+    });
+    if (cfg.auth.kind === 'login') seconds += 2;
+    var target = parseBase(cfg.target && cfg.target.url);
+    if (!target) problems.push('Enter the base URL of the API under test.');
+    if (!activeRequests(cfg).length) problems.push('Tick at least one request.');
+    if (!scns.length) problems.push('Turn on at least one scenario.');
+    if (cfg.auth.kind === 'login' && !(cfg.auth.login && cfg.auth.login.url)) problems.push('The token endpoint needs a URL.');
+    if (cfg.auth.kind === 'csv' && !(cfg.auth.csv && cfg.auth.csv.file)) problems.push('Name the CSV file the credentials come from.');
+    if (cfg.limiter.kind === 'apigee' && !limits.quota && !limits.spike) problems.push('Paste a Quota or SpikeArrest policy, and fill in the values it reads at run time.');
+    var needsOther = scns.some(function (s) { return s.kind === 'quota-isolation'; });
+    if (needsOther) {
+      var ik = limits.identifier.kind;
+      if ((ik === 'header' || ik === 'query') && !(cfg.limiter.identifier && cfg.limiter.identifier.other)) problems.push('The "another caller" scenario needs a second value for ' + limits.identifier.name + '.');
+      if (ik === 'credential' && cfg.auth.kind === 'static' && !cfg.auth.value2) problems.push('The "another caller" scenario needs a second token / key.');
+      if (ik === 'credential' && cfg.auth.kind === 'login') {
+        var l2 = cfg.auth.login2 || {};
+        var has2 = l2.basic && l2.basic.on ? !!l2.basic.id : !!l2.body;
+        if (!has2) problems.push('The "another caller" scenario needs the credentials of a second app.');
+      }
+      if (ik === 'credential' && (cfg.auth.kind === 'csv' || cfg.auth.kind === 'none')) problems.push('The "another caller" scenario needs a single credential plus a second one — not a CSV, and not "none".');
+    }
+    return { limits: limits, scenarios: scns, seconds: seconds, requests: requests, problems: problems, warnings: limits.warnings };
+  }
+
   function buildPlan(doc, cfg) {
-    if (!cfg.target || !cfg.target.host) throw new Error('no target host — enter the base URL first');
-    if (!activeRequests(cfg).length) throw new Error('pick at least one request to send');
-    if (cfg.auth.kind === 'login' && !(cfg.auth.login && cfg.auth.login.url)) {
-      throw new Error('the token endpoint needs a URL');
-    }
+    var est = estimate(cfg);
+    if (est.problems.length) throw new Error(est.problems[0]);
+    var limits = est.limits;
+    var target = parseBase(cfg.target.url);
+    var ctx = {
+      cfg: cfg, limits: limits, target: target,
+      active: activeRequests(cfg),
+      passParts: passRegexParts(cfg.checks),
+      signatures: limits.policies.map(function (p) { return p.faultSignature; }).filter(Boolean)
+        .filter(function (s, i, a) { return a.indexOf(s) === i; }),
+      authOf: authOf(doc)
+    };
+    cfg.authQueryName = cfg.auth.kind === 'static' && ctx.authOf.apiKeyIn === 'query' ? ctx.authOf.queryName : null;
+    if (cfg.authQueryName) ctx.authOf.queryName = cfg.authQueryName; else ctx.authOf.queryName = null;
 
-    var srv = cfg.target;
-    var file = slug(doc) + '-' + cfg.mode + '.jmx';
-    var knobs = ['  -Jhost=' + srv.host + ' -Jport=' + srv.port + ' -Jprotocol=' + srv.protocol];
-    if (cfg.mode === 'quota') {
-      knobs.push('  -Jrpm=' + cfg.quota.rpm + ' -Jduration=' + Math.round(cfg.quota.minutes * 60) +
-        ' -Jusers=' + cfg.quota.users);
-    }
-    if (cfg.auth.kind === 'static') knobs.push('  -Jtoken=YOUR_TOKEN');
+    var file = slug(doc) + '-' + (limits.kind === 'apigee' ? 'apigee' : limits.kind === 'known' ? 'quota' : limits.kind === 'unknown' ? 'find-limit' : 'load') + '.jmx';
+    var needsSecondToken = cfg.auth.kind === 'login' && est.scenarios.some(function (s) { return s.kind === 'quota-isolation'; }) && limits.identifier.kind === 'credential';
 
-    var comments = [
-      planTitle(doc, cfg),
-      '',
-      summarize(cfg),
-      cfg.limit ? '' : null,
-      cfg.limit ? 'Documented limit: ' + cfg.limit : null,
-      '',
-      'Run it:',
-      '  jmeter -n -t ' + file + ' -l results.jtl',
-      'Then count what came back — the code column tells the story:',
-      '  awk -F, \'NR>1 {print $3 " " $4}\' results.jtl | sort | uniq -c',
-      '',
-      'Overrides that need no editing:',
-      knobs.join('\n'),
-      '',
-      '2xx' + (cfg.checks.allow429 ? ' and 429' : '') + ' count as a pass, so a throttled request is a',
-      'result rather than an error; anything else fails the assertion.'
-    ].filter(function (l) { return l !== null && l !== undefined; }).join('\n');
+    var knobs = ['-Jhost=' + target.host + ' -Jport=' + target.port + ' -Jprotocol=' + target.protocol];
+    if (cfg.auth.kind === 'static') knobs.push('-Jtoken=…' + (cfg.auth.value2 ? ' -Jtoken2=…' : ''));
+    if (cfg.checks.rateHeader) knobs.push('-Jsample_variables=rateHeader   (writes the ' + cfg.checks.rateHeader + ' header into the .jtl)');
+
+    var comments = [planTitle(doc, limits), ''];
+    if (limits.policies.length && root.SduiApigee) {
+      limits.policies.forEach(function (p) { comments.push(root.SduiApigee.describe(p)); });
+      comments.push('');
+    } else if (limits.quota) {
+      comments.push('Documented limit: ' + limits.quota.requestsAllowed + ' requests per ' + fmtSeconds(limits.quota.windowSeconds) + ' for ' + limits.quota.identifier.label + '.');
+      comments.push('');
+    }
+    comments.push('Scenarios, run one after another:');
+    est.scenarios.forEach(function (s) { comments.push('  ' + s.key + '  ' + s.title + ' — ' + s.expectText); });
+    comments.push('', 'About ' + est.requests + ' requests, roughly ' + fmtSeconds(est.seconds) + ' in total.', '');
+    comments.push(describeAuth(cfg, needsSecondToken));
+    comments.push('', 'Run it:', '  jmeter -n -t ' + file + ' -l results.jtl -e -o report', '', 'The verdicts are printed on the console and written to results.jtl:', '  grep VERDICT results.jtl', '', 'Overrides that need no editing:');
+    knobs.forEach(function (k) { comments.push('  ' + k); });
+    comments.push('', 'A response with status ' + limits.limitCodes.join('/').replace(/\\d\\d/g, 'xx') + ' counts as "limited", 2xx' + (cfg.checks.allow3xx ? '/3xx' : '') + ' as "pass"; anything else is an error.');
 
     var w = new Jmx();
     w.line('<?xml version="1.0" encoding="UTF-8"?>');
     w.open('<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.4.3">');
     w.open('<hashTree>');
 
-    el(w, 'TestPlan', 'TestPlanGui', 'TestPlan', planTitle(doc, cfg), true);
-    w.sp('TestPlan.comments', comments);
+    el(w, 'TestPlan', 'TestPlanGui', 'TestPlan', planTitle(doc, limits), true);
+    w.sp('TestPlan.comments', comments.join('\n'));
     w.bp('TestPlan.functional_mode', false);
     w.bp('TestPlan.tearDown_on_shutdown', true);
-    w.bp('TestPlan.serialize_threadgroups', false);
-    w.open('<elementProp name="TestPlan.user_defined_variables" elementType="Arguments" ' +
-      'guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">');
+    // One scenario at a time: the verdicts only make sense when they do not overlap.
+    w.bp('TestPlan.serialize_threadgroups', true);
+    w.open('<elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">');
     w.line('<collectionProp name="Arguments.arguments"/>');
     w.close('</elementProp>');
     w.sp('TestPlan.user_define_classpath', '');
     w.close('</TestPlan>');
     w.open('<hashTree>');
 
-    el(w, 'ConfigTestElement', 'HttpDefaultsGui', 'ConfigTestElement', 'Target — ' + srv.host, true);
+    el(w, 'ConfigTestElement', 'HttpDefaultsGui', 'ConfigTestElement', 'Target — ' + target.host, true);
     httpArgs(w, [], null);
-    w.sp('HTTPSampler.domain', '${__P(host,' + srv.host + ')}');
-    w.sp('HTTPSampler.port', '${__P(port,' + srv.port + ')}');
-    w.sp('HTTPSampler.protocol', '${__P(protocol,' + srv.protocol + ')}');
+    w.sp('HTTPSampler.domain', '${__P(host,' + target.host + ')}');
+    w.sp('HTTPSampler.port', '${__P(port,' + target.port + ')}');
+    w.sp('HTTPSampler.protocol', '${__P(protocol,' + target.protocol + ')}');
     w.sp('HTTPSampler.contentEncoding', 'UTF-8');
     w.sp('HTTPSampler.path', '');
     w.sp('HTTPSampler.implementation', 'HttpClient4');
@@ -867,11 +1409,6 @@
     w.sp('HTTPSampler.response_timeout', String(cfg.checks.timeoutMs || 30000));
     w.close('</ConfigTestElement>');
     w.leaf();
-
-    var planHeaders = [{ name: 'Accept', value: 'application/json' }];
-    var ah = authHeader(cfg);
-    if (ah) planHeaders.push(ah);
-    headerManager(w, planHeaders, 'Headers sent with every request');
 
     if (cfg.cookies) {
       el(w, 'CookieManager', 'CookiePanel', 'CookieManager', 'HTTP Cookie Manager', true);
@@ -883,35 +1420,35 @@
       w.leaf();
     }
 
-    if (cfg.auth.kind === 'csv') csvDataSet(w, cfg);
-    if (cfg.auth.kind === 'login' && cfg.auth.refresh !== 'iteration') setupTokenGroup(w, cfg);
-
-    if (cfg.mode === 'spike') {
-      threadGroup(w, cfg, {
-        name: 'Spike — ' + cfg.spike.burst + ' at once x ' + cfg.spike.bursts,
-        threads: String(cfg.spike.burst), loops: String(cfg.spike.bursts),
-        ramp: '1', scheduler: false, duration: '', delay: '0', rpm: 0
-      });
-    } else if (cfg.mode === 'quota') {
-      threadGroup(w, cfg, {
-        name: 'Quota — ' + cfg.quota.rpm + ' req/min for ' + forHowLong(cfg.quota.minutes),
-        threads: '${__P(users,' + cfg.quota.users + ')}', loops: '-1',
-        ramp: String(Math.max(1, cfg.quota.rampup)), scheduler: true,
-        duration: '${__P(duration,' + Math.round(cfg.quota.minutes * 60) + ')}',
-        delay: '0', rpm: cfg.quota.rpm
-      });
-    } else {
-      // One thread group per step, each starting where the previous one ends:
-      // a staircase without any plugin.
-      rampSteps(cfg).forEach(function (s) {
-        threadGroup(w, cfg, {
-          name: 'Step ' + s.index + ' — ' + s.rpm + ' req/min',
-          threads: String(cfg.ramp.users), loops: '-1',
-          ramp: '1', scheduler: true, duration: String(s.seconds),
-          delay: String(s.delay), rpm: s.rpm
-        });
-      });
+    if (cfg.auth.kind === 'csv') {
+      el(w, 'CSVDataSet', 'TestBeanGUI', 'CSVDataSet', 'Credentials from ' + cfg.auth.csv.file, true);
+      w.sp('filename', cfg.auth.csv.file);
+      w.sp('fileEncoding', 'UTF-8');
+      w.sp('variableNames', cfg.auth.csv.variable);
+      w.bp('ignoreFirstLine', false);
+      w.sp('delimiter', ',');
+      w.bp('quotedData', false);
+      w.bp('recycle', true);
+      w.bp('stopThread', false);
+      w.sp('shareMode', 'shareMode.all');
+      w.close('</CSVDataSet>');
+      w.leaf();
     }
+
+    if (cfg.auth.kind === 'login' && cfg.auth.refresh !== 'iteration') setupTokenGroup(w, cfg, target, needsSecondToken);
+
+    est.scenarios.forEach(function (scn) {
+      scn.groups.forEach(function (g) { scenarioGroup(w, ctx, scn, g); });
+    });
+
+    threadGroupHead(w, 'PostThreadGroup', 'PostThreadGroupGui', 'tearDown — verdicts', {
+      threads: '1', loops: '1', ramp: '1', scheduler: false, duration: '', delay: ''
+    });
+    w.open('<hashTree>');
+    est.scenarios.forEach(function (scn) {
+      beanShellSampler(w, 'VERDICT ' + scn.key + ' — ' + scn.title, verdictScript(scn, limits));
+    });
+    w.close('</hashTree>');
 
     listener(w, 'SummaryReport', 'Summary Report', true);
     listener(w, 'StatVisualizer', 'Aggregate Report', true);
@@ -924,653 +1461,78 @@
     return {
       xml: w.text(),
       file: file,
-      summary: summarize(cfg),
-      command: 'jmeter -n -t ' + file + ' -l results.jtl',
-      total: totalRequests(cfg),
-      steps: cfg.mode === 'ramp' ? rampSteps(cfg) : null
+      title: planTitle(doc, limits),
+      estimate: est,
+      commands: [
+        'jmeter -n -t ' + file + ' -l results.jtl -e -o report',
+        'grep VERDICT results.jtl'
+      ],
+      knobs: knobs
     };
   }
 
-  /* ==================================================================
-     4. The wizard
-     ================================================================== */
-
-  function elem(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined && text !== null) e.textContent = text;
-    return e;
+  function planTitle(doc, limits) {
+    var name = (doc && doc.info && doc.info.title) || 'API';
+    if (limits.kind === 'apigee') return name + ' — Apigee ' + [limits.quota && 'quota', limits.spike && 'spike arrest'].filter(Boolean).join(' + ') + ' test';
+    if (limits.kind === 'known') return name + ' — rate limit test';
+    if (limits.kind === 'unknown') return name + ' — find the rate limit';
+    return name + ' — load test';
   }
 
-  function field(parent, label, control, hint) {
-    var wrap = elem('div', 'sdui-wz-field');
-    wrap.appendChild(elem('label', null, label));
-    wrap.appendChild(control);
-    if (hint) wrap.appendChild(elem('small', null, hint));
-    parent.appendChild(wrap);
-    return control;
+  function describeAuth(cfg, second) {
+    var a = cfg.auth;
+    if (a.kind === 'none') return 'No credential is sent.';
+    if (a.kind === 'csv') return 'Every iteration takes the next credential from ' + a.csv.file + ' (column ' + a.csv.variable + '); put the file next to the .jmx.';
+    if (a.kind === 'static') return 'Each request carries the ' + a.header + ' header you supplied (override with -Jtoken).';
+    var when = a.refresh === 'iteration' ? 'before every iteration'
+      : a.refresh === 'expiry' ? 'once before the load and again when it is older than its lifetime (expires_in when the endpoint returns one, otherwise ' + a.ttlMinutes + ' min)'
+        : 'once, in a setUp thread group, before any load';
+    return 'A token is fetched from ' + a.login.method + ' ' + a.login.url + ' ' + when + ' and sent in the ' + a.header + ' header.' +
+      (second ? ' A second token is fetched for the other app.' : '');
   }
 
-  function textBox(value) {
-    var i = document.createElement('input');
-    i.type = 'text';
-    i.spellcheck = false;
-    i.value = value === undefined || value === null ? '' : String(value);
-    return i;
-  }
-
-  function numberBox(value, min, step) {
-    var i = document.createElement('input');
-    i.type = 'number';
-    i.min = min === undefined ? '1' : String(min);
-    if (step) i.step = String(step);
-    i.value = String(value);
-    return i;
-  }
-
-  function dropdown(items, value) {
-    var s = document.createElement('select');
-    items.forEach(function (it) {
-      var o = document.createElement('option');
-      o.value = it.value;
-      o.textContent = it.label;
-      if (it.value === value) o.selected = true;
-      s.appendChild(o);
-    });
-    return s;
-  }
-
-  function checkbox(parent, label, checked, onChange, hint) {
-    var wrap = elem('label', 'sdui-wz-check');
-    var box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = !!checked;
-    wrap.appendChild(box);
-    var text = elem('span');
-    text.appendChild(elem('strong', null, label));
-    if (hint) text.appendChild(elem('small', null, hint));
-    wrap.appendChild(text);
-    box.addEventListener('change', function () { onChange(box.checked); });
-    parent.appendChild(wrap);
-    return box;
-  }
-
-  function grid(parent) {
-    var g = elem('div', 'sdui-wz-grid');
-    parent.appendChild(g);
-    return g;
-  }
-
-  function step(parent, num, title, hint) {
-    var s = elem('section', 'sdui-wz-step');
-    s.appendChild(elem('h4', null, (typeof num === 'number' ? num + '. ' : num + ' ') + title));
-    if (hint) s.appendChild(elem('p', 'sdui-wz-hint', hint));
-    parent.appendChild(s);
-    return s;
-  }
-
-  function choiceCards(parent, group, items, value, onPick) {
-    var wrap = elem('div', 'sdui-wz-choices');
-    items.forEach(function (it) {
-      var card = elem('label', 'sdui-wz-choice');
-      var radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = group;
-      radio.checked = it.value === value;
-      var text = elem('div');
-      text.appendChild(elem('strong', null, it.title));
-      text.appendChild(elem('span', null, it.desc));
-      card.appendChild(radio);
-      card.appendChild(text);
-      radio.addEventListener('change', function () { onPick(it.value); });
-      wrap.appendChild(card);
-    });
-    parent.appendChild(wrap);
-    return wrap;
-  }
-
-  function num(value, min) {
-    var n = parseFloat(value);
-    if (isNaN(n)) return min;
-    return n < min ? min : n;
-  }
-
-  function open(opts) {
-    var doc = opts.doc;
-    var ops = operations(doc);
-    if (!ops.length) throw new Error('the document has no operations to test');
-
-    var servers = serverUrls(doc);
-    var auth = authOf(doc);
-    var login = guessLogin(ops);
-    var target = guessTarget(ops, login);
-
-    function loginDefaults(entry) {
-      var body = entry ? bodyFor(doc, entry.op.requestBody) : null;
+  /* Default login settings for the token endpoint — from the OAuth 2 flow in
+     the document, a token-looking operation, or a blank client-credentials
+     call. */
+  function loginDefaults(doc, authInfo, entry) {
+    if (authInfo && authInfo.oauth) {
+      var o = authInfo.oauth;
+      var body = 'grant_type=' + (o.flow === 'password' ? 'password&username=&password=' : 'client_credentials');
+      if (o.scopes.length && o.flow === 'clientCredentials') body += '&scope=' + encodeURIComponent(o.scopes.join(' '));
       return {
-        source: entry ? entry.id : 'custom',
-        url: entry ? entry.path : '/oauth/token',
-        method: entry ? entry.method.toUpperCase() : 'POST',
-        contentType: (body && body.contentType) || 'application/json',
-        body: (body && body.text) ||
-          '{\n  "client_id": "",\n  "client_secret": "",\n  "grant_type": "client_credentials"\n}',
-        jsonPath: '$.access_token'
+        source: 'oauth', url: o.tokenUrl, method: 'POST',
+        contentType: 'application/x-www-form-urlencoded', body: body,
+        jsonPath: '$.access_token', expiresPath: '$.expires_in',
+        basic: { on: true, id: '', secret: '' }, headers: []
       };
     }
-
-    var cfg = {
-      mode: 'quota',
-      targetUrl: servers[0] || '',
-      target: parseBase(servers[0] || ''),
-      mix: 'sequence',
-      requests: ops.map(function (o) {
-        var req = requestFor(doc, o);
-        req.on = !!(target && o.id === target.id);
-        return req;
-      }),
-      think: { delay: 0, range: 0 },
-      spike: { burst: 50, bursts: 3, gap: 30 },
-      quota: { rpm: 600, minutes: 5, users: 10, rampup: 5 },
-      ramp: { startRpm: 60, stepRpm: 60, steps: 10, stepSeconds: 30, users: 10 },
-      auth: {
-        kind: login ? 'login' : (auth.secured ? 'static' : 'none'),
-        header: auth.header,
-        prefix: auth.prefix,
-        value: '',
-        refresh: 'once',
-        ttlMinutes: 30,
-        csv: { file: 'credentials.csv', variable: 'apiKey' },
-        login: loginDefaults(login)
-      },
-      checks: { allow429: true, allow3xx: false, extraCodes: '', maxMs: 0, connectMs: 10000, timeoutMs: 30000 },
-      cookies: false,
-      limit: ''
+    var rb = entry ? bodyFor(doc, entry.op.requestBody) : null;
+    return {
+      source: entry ? entry.id : 'custom',
+      url: entry ? entry.path : '/oauth/token',
+      method: entry ? entry.method.toUpperCase() : 'POST',
+      contentType: (rb && rb.contentType) || 'application/json',
+      body: (rb && rb.text) || '{\n  "client_id": "",\n  "client_secret": "",\n  "grant_type": "client_credentials"\n}',
+      jsonPath: '$.access_token', expiresPath: '$.expires_in',
+      basic: { on: false, id: '', secret: '' }, headers: []
     };
-
-    /* ----- shell ----- */
-    var overlay = elem('div', 'sdui-modal-overlay');
-    var modal = elem('div', 'sdui-modal sdui-wizard');
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'JMeter test plan');
-    var head = elem('div', 'sdui-modal-head');
-    head.appendChild(elem('span', null, 'JMeter scenario — ' + ((doc.info && doc.info.title) || 'API')));
-    var closeBtn = elem('button', 'sdui-tool-btn', 'Close');
-    closeBtn.type = 'button';
-    head.appendChild(closeBtn);
-    var body = elem('div', 'sdui-wizard-body');
-    var foot = elem('div', 'sdui-wz-foot');
-    var note = elem('div', 'sdui-wz-note', '');
-    var actions = elem('div', 'sdui-wz-actions');
-    var cancel = elem('button', 'sdui-tool-btn', 'Cancel');
-    cancel.type = 'button';
-    var generate = elem('button', 'sdui-tool-btn sdui-wz-primary', 'Download .jmx');
-    generate.type = 'button';
-    actions.appendChild(cancel);
-    actions.appendChild(generate);
-    foot.appendChild(note);
-    foot.appendChild(actions);
-    modal.appendChild(head);
-    modal.appendChild(body);
-    modal.appendChild(foot);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    function dismiss() {
-      overlay.remove();
-      document.removeEventListener('keydown', onKey);
-    }
-    function onKey(e) { if (e.key === 'Escape') dismiss(); }
-    closeBtn.addEventListener('click', dismiss);
-    cancel.addEventListener('click', dismiss);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) dismiss(); });
-    document.addEventListener('keydown', onKey);
-
-    var summaryBox = null;
-    function refreshSummary() {
-      if (!summaryBox) return;
-      summaryBox.textContent = summarize(cfg);
-      note.textContent = problem() || '';
-    }
-
-    /* What still stands between these answers and a plan that runs. */
-    function problem() {
-      if (!cfg.target) return 'Enter the base URL of the API you want to test.';
-      if (!activeRequests(cfg).length) return 'Tick at least one request.';
-      if (cfg.auth.kind === 'login' && !cfg.auth.login.url) return 'The token endpoint needs a URL.';
-      if (cfg.auth.kind === 'csv' && !cfg.auth.csv.file) return 'Name the CSV file the credentials come from.';
-      return '';
-    }
-
-    function entryById(id) {
-      var hit = null;
-      ops.forEach(function (o) { if (o.id === id) hit = o; });
-      return hit;
-    }
-
-    /* ----- request list ----- */
-    function renderRequests(host) {
-      host.innerHTML = '';
-      cfg.requests.forEach(function (req) {
-        var row = elem('div', 'sdui-wz-req');
-        var rowHead = elem('div', 'sdui-wz-req-head');
-        var label = elem('label', 'sdui-wz-req-label');
-        var box = document.createElement('input');
-        box.type = 'checkbox';
-        box.checked = req.on;
-        label.appendChild(box);
-        var name = elem('span', 'sdui-wz-req-name', req.label);
-        label.appendChild(name);
-        if (req.summary) label.appendChild(elem('span', 'sdui-wz-req-sum', req.summary));
-        rowHead.appendChild(label);
-        box.addEventListener('change', function () { req.on = box.checked; refreshSummary(); });
-
-        if (cfg.mix === 'weighted') {
-          var weight = numberBox(req.weight, 0);
-          weight.className = 'sdui-wz-weight';
-          weight.title = 'Share of the traffic';
-          weight.addEventListener('input', function () {
-            req.weight = num(weight.value, 0);
-            refreshSummary();
-          });
-          rowHead.appendChild(weight);
-        }
-
-        var detail = elem('div', 'sdui-wz-req-body');
-        detail.hidden = true;
-        var toggle = elem('button', 'sdui-wz-link', 'values');
-        toggle.type = 'button';
-        toggle.addEventListener('click', function () { detail.hidden = !detail.hidden; });
-        rowHead.appendChild(toggle);
-        if (req.custom) {
-          var drop = elem('button', 'sdui-wz-link', 'remove');
-          drop.type = 'button';
-          drop.addEventListener('click', function () {
-            cfg.requests = cfg.requests.filter(function (r) { return r !== req; });
-            renderRequests(host);
-            refreshSummary();
-          });
-          rowHead.appendChild(drop);
-        }
-        row.appendChild(rowHead);
-
-        if (req.custom) {
-          var cg = grid(detail);
-          var mSel = field(cg, 'Method', dropdown(
-            ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(function (m) { return { value: m, label: m }; }),
-            req.method));
-          var uBox = field(cg, 'Full URL', textBox(req.url),
-            'https://another-api.example.com/v2/things');
-          mSel.addEventListener('change', function () {
-            req.method = mSel.value;
-            req.label = req.method + ' ' + req.url;
-            name.textContent = req.label;
-            refreshSummary();
-          });
-          uBox.addEventListener('input', function () {
-            req.url = uBox.value.trim();
-            req.label = req.method + ' ' + req.url;
-            name.textContent = req.label;
-            refreshSummary();
-          });
-          var cta = document.createElement('textarea');
-          cta.rows = 3;
-          cta.spellcheck = false;
-          cta.value = req.body ? req.body.text : '';
-          field(detail, 'Body (JSON, leave empty for none)', cta);
-          cta.addEventListener('input', function () {
-            req.body = cta.value ? { contentType: 'application/json', text: cta.value } : null;
-          });
-        } else {
-          if (req.pathParams.length || req.query.length) {
-            var vg = grid(detail);
-            req.pathParams.forEach(function (p) {
-              var pb = field(vg, 'Path · ' + p.name, textBox(p.value));
-              pb.addEventListener('input', function () { p.value = pb.value; });
-            });
-            req.query.forEach(function (q) {
-              var qb = field(vg, 'Query · ' + q.name, textBox(q.value));
-              qb.addEventListener('input', function () { q.value = qb.value; });
-            });
-          }
-          if (req.body) {
-            var ta = document.createElement('textarea');
-            ta.rows = 4;
-            ta.spellcheck = false;
-            ta.value = req.body.text;
-            field(detail, 'Body (' + req.body.contentType + ')', ta,
-              /multipart/.test(req.body.contentType)
-                ? 'Each key becomes a form field; file uploads have to be added in JMeter.'
-                : 'Sent exactly as written.');
-            ta.addEventListener('input', function () { req.body.text = ta.value; });
-          }
-          if (!req.pathParams.length && !req.query.length && !req.body) {
-            detail.appendChild(elem('p', 'sdui-wz-hint', 'This request takes no values.'));
-          }
-        }
-        row.appendChild(detail);
-        host.appendChild(row);
-      });
-    }
-
-    /* ----- the form ----- */
-    function render() {
-      body.innerHTML = '';
-
-      /* 1 — where */
-      var s1 = step(body, 1, 'Which host is under test?',
-        servers.length
-          ? 'Taken from the document; change it to point the same scenario at staging or production.'
-          : 'This document does not say where the API lives, so nothing can be assumed — type the base URL you want to hit.');
-      if (servers.length > 1) {
-        var ssel = dropdown(servers.map(function (u) { return { value: u, label: u }; })
-          .concat([{ value: '', label: 'Another URL…' }]), cfg.targetUrl);
-        field(s1, 'Server from the document', ssel);
-        ssel.addEventListener('change', function () {
-          cfg.targetUrl = ssel.value;
-          cfg.target = parseBase(cfg.targetUrl);
-          render();
-        });
-      }
-      var urlBox = field(s1, 'Base URL', textBox(cfg.targetUrl),
-        'Scheme, host, optional port and the common path prefix — https://api.acme.com/v1');
-      urlBox.addEventListener('input', function () {
-        cfg.targetUrl = urlBox.value.trim();
-        cfg.target = parseBase(cfg.targetUrl);
-        urlBox.className = cfg.target || !cfg.targetUrl ? '' : 'sdui-wz-bad';
-        refreshSummary();
-      });
-      if (!cfg.target && !cfg.targetUrl) urlBox.placeholder = 'https://api.example.com/v1';
-
-      /* 2 — what shape */
-      var s2 = step(body, 2, 'What kind of run?',
-        'This decides the shape of the traffic — a wall at one instant, a held rate, or a climb.');
-      choiceCards(s2, 'sdui-wz-mode', [
-        { value: 'spike', title: 'Spike arrest', desc: 'A burst released at the same instant, repeated as often as you like. Shows the per-second cap.' },
-        { value: 'quota', title: 'Quota / rate limit', desc: 'A steady rate held for a set time. Shows where a per-minute or per-hour quota runs out.' },
-        { value: 'ramp', title: 'Ramp until it breaks', desc: 'Steps the rate up until the 429s start. The step where they begin is the limit.' }
-      ], cfg.mode, function (v) { cfg.mode = v; render(); });
-
-      var g2 = grid(s2);
-      if (cfg.mode === 'spike') {
-        var burst = field(g2, 'Requests per burst', numberBox(cfg.spike.burst, 1),
-          'All of them leave at the same instant.');
-        var bursts = field(g2, 'How many bursts', numberBox(cfg.spike.bursts, 1));
-        var gap = field(g2, 'Seconds between bursts', numberBox(cfg.spike.gap, 0),
-          'Long enough for the window to reset, if you want each burst judged on its own.');
-        burst.addEventListener('input', function () { cfg.spike.burst = num(burst.value, 1); refreshSummary(); });
-        bursts.addEventListener('input', function () { cfg.spike.bursts = num(bursts.value, 1); refreshSummary(); });
-        gap.addEventListener('input', function () { cfg.spike.gap = num(gap.value, 0); refreshSummary(); });
-      } else if (cfg.mode === 'quota') {
-        var rpm = field(g2, 'Requests per minute', numberBox(cfg.quota.rpm, 1),
-          'The whole run holds this rate, not each user.');
-        var mins = field(g2, 'For how many minutes', numberBox(cfg.quota.minutes, 0.5, 0.5),
-          'A quota window is only proven once you run past it — 60 for an hourly limit.');
-        var vu = field(g2, 'Virtual users', numberBox(cfg.quota.users, 1),
-          'One user cannot beat its own round-trip time; add users until they can carry the rate.');
-        var ramp = field(g2, 'Ramp-up seconds', numberBox(cfg.quota.rampup, 1),
-          'Users join over this many seconds instead of all at once.');
-        rpm.addEventListener('input', function () { cfg.quota.rpm = num(rpm.value, 1); refreshSummary(); });
-        mins.addEventListener('input', function () { cfg.quota.minutes = num(mins.value, 0.1); refreshSummary(); });
-        vu.addEventListener('input', function () { cfg.quota.users = num(vu.value, 1); refreshSummary(); });
-        ramp.addEventListener('input', function () { cfg.quota.rampup = num(ramp.value, 1); });
-      } else {
-        var start = field(g2, 'Start at (req/min)', numberBox(cfg.ramp.startRpm, 1));
-        var stepBy = field(g2, 'Add per step (req/min)', numberBox(cfg.ramp.stepRpm, 1));
-        var steps = field(g2, 'How many steps', numberBox(cfg.ramp.steps, 1),
-          'Each step is its own thread group, so the report shows them apart.');
-        var secs = field(g2, 'Seconds per step', numberBox(cfg.ramp.stepSeconds, 5));
-        var ru = field(g2, 'Virtual users per step', numberBox(cfg.ramp.users, 1),
-          'Has to be enough to carry the highest step.');
-        start.addEventListener('input', function () { cfg.ramp.startRpm = num(start.value, 1); refreshSummary(); });
-        stepBy.addEventListener('input', function () { cfg.ramp.stepRpm = num(stepBy.value, 0); refreshSummary(); });
-        steps.addEventListener('input', function () { cfg.ramp.steps = Math.round(num(steps.value, 1)); refreshSummary(); });
-        secs.addEventListener('input', function () { cfg.ramp.stepSeconds = Math.round(num(secs.value, 5)); refreshSummary(); });
-        ru.addEventListener('input', function () { cfg.ramp.users = num(ru.value, 1); refreshSummary(); });
-      }
-      if (cfg.mode !== 'spike') {
-        var g2b = grid(s2);
-        var think = field(g2b, 'Think time between requests (ms)', numberBox(cfg.think.delay, 0),
-          'Zero keeps the rate purely in the pacing timer.');
-        var jitter = field(g2b, 'Random extra (ms)', numberBox(cfg.think.range, 0),
-          'Added at random on top, so threads do not march in lockstep.');
-        think.addEventListener('input', function () { cfg.think.delay = Math.round(num(think.value, 0)); refreshSummary(); });
-        jitter.addEventListener('input', function () { cfg.think.range = Math.round(num(jitter.value, 0)); refreshSummary(); });
-      }
-
-      /* 3 — what traffic */
-      var s3 = step(body, 3, 'Which requests take part?',
-        'Tick everything the scenario should send. Several endpoints — or a request from a completely different API — can run in the same plan.');
-      choiceCards(s3, 'sdui-wz-mix', [
-        { value: 'sequence', title: 'In order', desc: 'Every iteration walks the ticked requests top to bottom — a user journey.' },
-        { value: 'weighted', title: 'By share', desc: 'Each request gets a share of the traffic, so the mix matches production.' }
-      ], cfg.mix, function (v) { cfg.mix = v; render(); });
-
-      var tools = elem('div', 'sdui-wz-reqtools');
-      var all = elem('button', 'sdui-wz-link', 'select all');
-      all.type = 'button';
-      var none = elem('button', 'sdui-wz-link', 'select none');
-      none.type = 'button';
-      var add = elem('button', 'sdui-wz-link', '+ request from another API');
-      add.type = 'button';
-      tools.appendChild(all);
-      tools.appendChild(none);
-      tools.appendChild(add);
-      s3.appendChild(tools);
-      var reqHost = elem('div', 'sdui-wz-reqs');
-      s3.appendChild(reqHost);
-      renderRequests(reqHost);
-      all.addEventListener('click', function () {
-        cfg.requests.forEach(function (r) { r.on = true; });
-        renderRequests(reqHost);
-        refreshSummary();
-      });
-      none.addEventListener('click', function () {
-        cfg.requests.forEach(function (r) { r.on = false; });
-        renderRequests(reqHost);
-        refreshSummary();
-      });
-      add.addEventListener('click', function () {
-        cfg.requests.push(customRequest(''));
-        renderRequests(reqHost);
-        refreshSummary();
-      });
-
-      /* 4 — credentials */
-      var s4 = step(body, 4, 'What credential do the requests carry?',
-        'Rate limits are counted per credential, so this is what decides whose limit you are measuring.');
-      choiceCards(s4, 'sdui-wz-auth', [
-        { value: 'login', title: 'Fetch a token', desc: 'Call the token endpoint and reuse what it returns.' },
-        { value: 'static', title: 'I have one', desc: 'Paste a token or API key; -Jtoken overrides it at run time.' },
-        { value: 'csv', title: 'Many keys from a CSV', desc: 'Each iteration takes the next line — the way to prove a per-key limit.' },
-        { value: 'none', title: 'None', desc: 'Open endpoint, or the limiter counts by IP.' }
-      ], cfg.auth.kind, function (v) { cfg.auth.kind = v; render(); });
-
-      if (cfg.auth.kind !== 'none') {
-        var gh = grid(s4);
-        var hn = field(gh, 'Header', textBox(cfg.auth.header));
-        var hp = field(gh, 'Value prefix', textBox(cfg.auth.prefix), 'Empty for a bare API key.');
-        hn.addEventListener('input', function () { cfg.auth.header = hn.value; refreshSummary(); });
-        hp.addEventListener('input', function () { cfg.auth.prefix = hp.value; });
-      }
-
-      if (cfg.auth.kind === 'static') {
-        var sv = field(s4, 'Token / key', textBox(cfg.auth.value), 'Override at run time with -Jtoken=…');
-        sv.addEventListener('input', function () { cfg.auth.value = sv.value; });
-      }
-
-      if (cfg.auth.kind === 'csv') {
-        var gc = grid(s4);
-        var cf = field(gc, 'CSV file next to the .jmx', textBox(cfg.auth.csv.file),
-          'One credential per line; the file is shared by all threads and recycled.');
-        var cv = field(gc, 'Column name', textBox(cfg.auth.csv.variable));
-        cf.addEventListener('input', function () { cfg.auth.csv.file = cf.value.trim(); refreshSummary(); });
-        cv.addEventListener('input', function () { cfg.auth.csv.variable = cv.value.trim() || 'apiKey'; });
-      }
-
-      if (cfg.auth.kind === 'login') {
-        var lg = cfg.auth.login;
-        var lsel = dropdown(ops.map(function (o) {
-          return { value: o.id, label: o.method.toUpperCase() + ' ' + o.path + (o.summary ? '  —  ' + o.summary : '') };
-        }).concat([{ value: 'custom', label: 'Another URL — not in this document' }]), lg.source);
-        field(s4, 'Token endpoint', lsel);
-        lsel.addEventListener('change', function () {
-          var entry = lsel.value === 'custom' ? null : entryById(lsel.value);
-          cfg.auth.login = loginDefaults(entry);
-          cfg.auth.login.source = lsel.value;
-          render();
-        });
-        var gl = grid(s4);
-        var lu = field(gl, 'URL or path', textBox(lg.url),
-          'A path uses the host above; a full https:// URL calls its own host.');
-        var lm = field(gl, 'Method', dropdown(
-          ['POST', 'GET', 'PUT'].map(function (m) { return { value: m, label: m }; }), lg.method));
-        var lc = field(gl, 'Content type', dropdown([
-          { value: 'application/json', label: 'application/json' },
-          { value: 'application/x-www-form-urlencoded', label: 'application/x-www-form-urlencoded' }
-        ], lg.contentType));
-        var lj = field(gl, 'Token field in the response', textBox(lg.jsonPath),
-          'JSON path — $.access_token, $.data.token …');
-        lu.addEventListener('input', function () { lg.url = lu.value.trim(); refreshSummary(); });
-        lm.addEventListener('change', function () { lg.method = lm.value; refreshSummary(); });
-        lc.addEventListener('change', function () {
-          lg.contentType = lc.value;
-          lg.body = /x-www-form-urlencoded/.test(lg.contentType) ? asForm(lg.body) : asJson(lg.body);
-          render();
-        });
-        lj.addEventListener('input', function () { lg.jsonPath = lj.value.trim(); });
-        var lta = document.createElement('textarea');
-        lta.rows = 4;
-        lta.spellcheck = false;
-        lta.value = lg.body;
-        field(s4, 'Credentials sent to that endpoint', lta,
-          'The real client id / secret — this is the identity being rate limited.');
-        lta.addEventListener('input', function () { lg.body = lta.value; });
-
-        var gt = grid(s4);
-        var ttl = field(gt, 'Token valid for (minutes)', numberBox(cfg.auth.ttlMinutes, 1),
-          'From expires_in ÷ 60 if the endpoint returns one.');
-        ttl.addEventListener('input', function () { cfg.auth.ttlMinutes = num(ttl.value, 1); refreshSummary(); });
-        var rsel = field(gt, 'When is it fetched?', dropdown([
-          { value: 'once', label: 'Once, before the run' },
-          { value: 'expiry', label: 'Again when it expires' },
-          { value: 'iteration', label: 'Before every iteration' }
-        ], cfg.auth.refresh), refreshHint(cfg.auth.refresh, cfg));
-        rsel.addEventListener('change', function () { cfg.auth.refresh = rsel.value; render(); });
-      }
-
-      /* 5 — what counts as a pass */
-      var s5 = step(body, 5, 'What counts as a pass?',
-        'JMeter fails every non-2xx sample on its own; this is where you say which codes are a result rather than a fault.');
-      checkbox(s5, 'A 429 is a result, not an error', cfg.checks.allow429, function (v) {
-        cfg.checks.allow429 = v;
-        refreshSummary();
-      }, 'Keep this on for any rate-limit test — otherwise the run drowns in false failures.');
-      checkbox(s5, 'Redirects (3xx) pass too', cfg.checks.allow3xx, function (v) { cfg.checks.allow3xx = v; });
-      checkbox(s5, 'Send and keep cookies', cfg.cookies, function (v) { cfg.cookies = v; },
-        'Needed when the API hands out a session or sits behind a sticky load balancer.');
-      var g5 = grid(s5);
-      var extra = field(g5, 'Other codes that pass', textBox(cfg.checks.extraCodes), 'e.g. 404 403');
-      var slow = field(g5, 'Fail slower than (ms, 0 = off)', numberBox(cfg.checks.maxMs, 0));
-      var ct = field(g5, 'Connect timeout (ms)', numberBox(cfg.checks.connectMs, 100));
-      var rt = field(g5, 'Response timeout (ms)', numberBox(cfg.checks.timeoutMs, 100));
-      var lim = field(g5, 'Documented limit (optional)', textBox(cfg.limit),
-        'Written into the plan — "100 req/min per key".');
-      extra.addEventListener('input', function () { cfg.checks.extraCodes = extra.value; });
-      slow.addEventListener('input', function () { cfg.checks.maxMs = Math.round(num(slow.value, 0)); refreshSummary(); });
-      ct.addEventListener('input', function () { cfg.checks.connectMs = Math.round(num(ct.value, 100)); });
-      rt.addEventListener('input', function () { cfg.checks.timeoutMs = Math.round(num(rt.value, 100)); });
-      lim.addEventListener('input', function () { cfg.limit = lim.value; });
-
-      var sum = elem('section', 'sdui-wz-step');
-      sum.appendChild(elem('h4', null, 'What will run'));
-      summaryBox = elem('div', 'sdui-wz-summary', '');
-      sum.appendChild(summaryBox);
-      body.appendChild(sum);
-      refreshSummary();
-    }
-
-    function refreshHint(mode, conf) {
-      if (mode === 'iteration') return 'The token endpoint then carries the same load as the API — that is a test of its own limit.';
-      if (mode === 'expiry') return 'One thread refreshes at a time; the others keep using the current token.';
-      return 'Fine while the run is shorter than the token\'s life (' + conf.auth.ttlMinutes + ' min).';
-    }
-
-    /* ----- result panel ----- */
-    function showResult(plan) {
-      body.innerHTML = '';
-      var done = step(body, '✔', 'Downloaded — ' + plan.file);
-      done.appendChild(elem('div', 'sdui-wz-summary', plan.summary));
-
-      var runStep = step(body, 1, 'Run it');
-      runStep.appendChild(elem('pre', 'sdui-wz-cmd', plan.command));
-      runStep.appendChild(elem('p', 'sdui-wz-hint',
-        'Or open it in the JMeter GUI and press Start — nothing needs editing first.' +
-        (cfg.auth.kind === 'csv' ? ' Put ' + cfg.auth.csv.file + ' next to the .jmx before you start.' : '')));
-
-      var readStep = step(body, 2, 'Read the result');
-      readStep.appendChild(elem('pre', 'sdui-wz-cmd',
-        'awk -F, \'NR>1 {print $3 " " $4}\' results.jtl | sort | uniq -c'));
-      var list = elem('ul', 'sdui-wz-list');
-      [
-        '2xx — the request was allowed through.',
-        '429 — the limiter answered. Where the 429s start is the limit.',
-        'Anything else fails the assertion and is a real error, not throttling.',
-        plan.steps
-          ? 'The steps climb ' + plan.steps.map(function (s) { return s.rpm; }).join(' → ') +
-            ' req/min; compare the 429 count per step.'
-          : 'This run sends about ' + plan.total + ' requests in total.'
-      ].forEach(function (t) { list.appendChild(elem('li', null, t)); });
-      readStep.appendChild(list);
-
-      note.textContent = '';
-      actions.innerHTML = '';
-      var copy = elem('button', 'sdui-tool-btn', 'Copy command');
-      copy.type = 'button';
-      copy.addEventListener('click', function () {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(plan.command).then(function () { copy.textContent = 'Copied'; }, function () {});
-        }
-      });
-      var again = elem('button', 'sdui-tool-btn', 'Change and rebuild');
-      again.type = 'button';
-      again.addEventListener('click', function () {
-        actions.innerHTML = '';
-        actions.appendChild(cancel);
-        actions.appendChild(generate);
-        render();
-      });
-      var ok = elem('button', 'sdui-tool-btn sdui-wz-primary', 'Done');
-      ok.type = 'button';
-      ok.addEventListener('click', dismiss);
-      actions.appendChild(copy);
-      actions.appendChild(again);
-      actions.appendChild(ok);
-    }
-
-    generate.addEventListener('click', function () {
-      var blocker = problem();
-      if (blocker) { note.textContent = blocker; return; }
-      try {
-        var plan = buildPlan(doc, cfg);
-        opts.download(plan.file, 'application/xml', plan.xml);
-        opts.setStatus('ok', 'JMeter plan downloaded — ' + plan.file + ' · ' + plan.command);
-        showResult(plan);
-      } catch (err) {
-        note.textContent = 'Could not build the plan: ' + (err.message || err);
-      }
-    });
-
-    render();
   }
 
-  window.SduiJMeter = {
-    open: open,
+  var api = {
     build: buildPlan,
+    estimate: estimate,
+    suggestScenarios: suggestScenarios,
+    resolveLimits: resolveLimits,
+    kindInfo: kindInfo,
+    fmtSeconds: fmtSeconds,
+    asForm: asForm,
+    asJson: asJson,
     read: {
       operations: operations, servers: serverUrls, parseBase: parseBase, auth: authOf,
       guessLogin: guessLogin, guessTarget: guessTarget, request: requestFor,
-      custom: customRequest, body: bodyFor
+      custom: customRequest, body: bodyFor, loginDefaults: loginDefaults
     }
   };
-})();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.SduiJMeter = api;
+})(typeof window !== 'undefined' ? window : this);

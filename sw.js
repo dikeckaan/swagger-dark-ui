@@ -7,7 +7,7 @@
    straight to the network. */
 'use strict';
 
-var CACHE = 'sdui-v3'; // bumped: OASForge rebrand
+var CACHE = 'sdui-v4'; // bumped: JMeter scenario generator rewrite
 
 var SHELL = [
   './',
@@ -26,6 +26,9 @@ var SHELL = [
   './js/convert20.js',
   './js/history.js',
   './js/export.js',
+  './js/apigee.js',
+  './js/jmeter.js',
+  './js/jmeter-wizard.js',
   './js/mock.js',
   './js/postman.js',
   './vendor/swagger-ui.css',
