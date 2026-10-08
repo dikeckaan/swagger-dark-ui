@@ -1,0 +1,88 @@
+name: Build branch (same build as the deploys)
+
+# Every branch gets the exact build the two deploy workflows run on main —
+# the Cloudflare edition and the GitHub Pages edition, standalone.html
+# included — without touching either production site. The outputs are kept
+# as workflow artifacts, and when the Cloudflare secrets are set the branch
+# is also uploaded as a Worker *version* (not deployed), which gives it a
+# preview URL of its own.
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build Cloudflare edition (dist-cf)
+        run: node build-cf.js
+      - name: Build GitHub Pages edition (dist-pages)
+        run: node build-cf.js --base /swagger-dark-ui --out dist-pages
+      - name: Check the builds
+        run: |
+          test -s dist-cf/index.html
+          test -s dist-cf/app/index.html
+          test -s dist-cf/standalone.html
+          test -s dist-pages/app/index.html
+          for f in apigee jmeter jmeter-wizard; do
+            test -s "dist-cf/app/js/$f.js"
+            grep -q "js/$f.js" dist-cf/app/index.html
+          done
+          for f in js/*.js build-cf.js build-standalone.js site-cf/pages.js; do node --check "$f"; done
+      - name: Keep the Cloudflare build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-cf
+          path: dist-cf
+          retention-days: 7
+      - name: Keep the GitHub Pages build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-pages
+          path: dist-pages
+          retention-days: 7
+      - name: Keep standalone.html
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone.html
+          path: dist-cf/standalone.html
+          retention-days: 7
+
+      # Same secrets as deploy-cf.yml; a quiet no-op without them. A version
+      # upload does not change what oasforge.dev serves — it only creates a
+      # preview URL (…-oasforge.<account>.workers.dev) for this branch.
+      - name: Check Cloudflare secrets
+        id: cf
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "ok=${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}" >> "$GITHUB_OUTPUT"
+      - name: Upload a preview version to Cloudflare Workers
+        id: preview
+        if: steps.cf.outputs.ok == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions upload --message "${{ github.ref_name }} @ ${{ github.sha }}"
+      - name: Note the preview URL
+        if: steps.cf.outputs.ok == 'true'
+        run: |
+          url=$(printf '%s\n' "${{ steps.preview.outputs.command-output }}" | grep -o 'https://[^ ]*workers.dev[^ ]*' | head -1)
+          {
+            echo "## Branch build"
+            echo
+            echo "- Branch: \`${{ github.ref_name }}\` (\`${{ github.sha }}\`)"
+            if [ -n "$url" ]; then echo "- Cloudflare preview: $url"; else echo "- Cloudflare preview: uploaded (see the wrangler output above for the URL)"; fi
+            echo "- Artifacts: dist-cf, dist-pages, standalone.html"
+          } >> "$GITHUB_STEP_SUMMARY"
