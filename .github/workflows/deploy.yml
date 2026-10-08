@@ -1,8 +1,10 @@
 name: Deploy to GitHub Pages
 
+# Deploys whichever branch was pushed last (pages/* twins excluded): the
+# GitHub Pages mirror is the preview site, oasforge.dev stays on main.
 on:
   push:
-    branches: [main]
+    branches-ignore: ['pages/**']
   workflow_dispatch:
 
 permissions:

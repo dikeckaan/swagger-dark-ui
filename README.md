@@ -137,17 +137,20 @@ the root, the app at `/app/`, static `/guide/`, `/faq/` and landing pages,
 - **GitHub Pages mirror** (`kaandikec.com/swagger-dark-ui`) — the
   [Pages workflow](.github/workflows/deploy.yml) runs the same script with
   `--base /swagger-dark-ui --out dist-pages` so internal links carry the
-  sub-path prefix. Canonical URLs point at oasforge.dev, so search signals
-  consolidate on the primary domain.
+  sub-path prefix. It deploys **whichever branch was pushed last** (Pages
+  source set to *GitHub Actions*), so the mirror doubles as the preview of
+  the branch being worked on; `main` goes live there again on its next push
+  or a manual *Run workflow*. Canonical URLs point at oasforge.dev, so
+  search signals consolidate on the primary domain.
 - **Every branch** — the [build workflow](.github/workflows/build.yml)
   runs both of the builds above on each push (and on pull requests), checks
   the output, and keeps `dist-cf/`, `dist-pages/` and `standalone.html` as
   workflow artifacts for 7 days. It also pushes the GitHub Pages edition to
   a `pages/<branch>` branch (one orphan commit, force-pushed, deleted with
-  its source branch), so *Settings → Pages → Deploy from a branch →
-  `pages/<branch>`* serves the full site — landing page at the root, the
-  app under `/app/` — exactly like the deploy from `main`; the raw source
-  branch only ever serves the bare app. With the Cloudflare secrets set it
+  its source branch), for the case where Pages is set to *Deploy from a
+  branch*: `pages/<branch>` then serves the full site — landing page at the
+  root, the app under `/app/` — while the raw source branch only ever serves
+  the bare app. With the Cloudflare secrets set it
   additionally uploads the branch as a Worker *version* — a preview URL of
   its own, with oasforge.dev untouched; the URL is in the job summary.
 
