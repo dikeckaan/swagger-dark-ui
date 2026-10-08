@@ -36,6 +36,19 @@
     if (!schema) return undefined;
     var mock = root.SduiMock;
     if (mock && mock.exampleFromSchema) return mock.exampleFromSchema(schema, doc);
+    // Without the mock's generator: the examples the schema carries itself.
+    var sch = deref(doc, schema);
+    if (!isObj(sch)) return undefined;
+    if (sch.example !== undefined) return sch.example;
+    if (sch.default !== undefined) return sch.default;
+    if (isObj(sch.properties)) {
+      var o = {};
+      Object.keys(sch.properties).forEach(function (k) {
+        var v = exampleFor(doc, sch.properties[k]);
+        if (v !== undefined) o[k] = v;
+      });
+      return o;
+    }
     return undefined;
   }
 
@@ -1516,15 +1529,66 @@
       };
     }
     var rb = entry ? bodyFor(doc, entry.op.requestBody) : null;
+    var paths = entry ? tokenPaths(doc, entry.op) : {};
     return {
       source: entry ? entry.id : 'custom',
       url: entry ? entry.path : '/oauth/token',
       method: entry ? entry.method.toUpperCase() : 'POST',
       contentType: (rb && rb.contentType) || 'application/json',
       body: (rb && rb.text) || '{\n  "client_id": "",\n  "client_secret": "",\n  "grant_type": "client_credentials"\n}',
-      jsonPath: '$.access_token', expiresPath: '$.expires_in',
-      basic: { on: false, id: '', secret: '' }, headers: []
+      jsonPath: paths.token || '$.access_token', expiresPath: paths.expires || '$.expires_in',
+      // An operation secured with HTTP Basic takes the client id and secret
+      // in the Authorization header — how Apigee's token endpoints work.
+      basic: { on: !!(entry && usesBasic(doc, entry.op)), id: '', secret: '' }, headers: []
     };
+  }
+
+  /* Does this operation (or the document, when it says nothing) require an
+     HTTP Basic scheme? */
+  function usesBasic(doc, op) {
+    var schemes = isObj(doc) && doc.components && doc.components.securitySchemes;
+    if (!isObj(schemes)) return false;
+    var reqs = Array.isArray(op.security) ? op.security : (Array.isArray(doc.security) ? doc.security : []);
+    return reqs.some(function (req) {
+      return isObj(req) && Object.keys(req).some(function (name) {
+        var sch = deref(doc, schemes[name]);
+        return isObj(sch) && sch.type === 'http' && /^basic$/i.test(sch.scheme || '');
+      });
+    });
+  }
+
+  /* Where the token (and its lifetime) sit in the success response, read
+     from the operation's own example: "$.access_token", "$.data.token" … */
+  function tokenPaths(doc, op) {
+    var out = {};
+    var responses = isObj(op.responses) ? op.responses : {};
+    var res = deref(doc, responses['200'] || responses['201'] || responses.default);
+    if (!isObj(res) || !isObj(res.content)) return out;
+    var mime = Object.keys(res.content).filter(function (m) { return /json/.test(m); })[0] || Object.keys(res.content)[0];
+    var mt = mime && res.content[mime];
+    if (!isObj(mt)) return out;
+    var example = mt.example !== undefined ? mt.example
+      : (isObj(mt.examples) && Object.keys(mt.examples).length
+        ? (deref(doc, mt.examples[Object.keys(mt.examples)[0]]) || {}).value
+        : exampleFor(doc, mt.schema));
+    if (!isObj(example)) return out;
+    function find(obj, prefix, test, depth) {
+      var keys = Object.keys(obj);
+      var hit = keys.filter(function (k) { return test.test(k) && (obj[k] === null || typeof obj[k] !== 'object'); })[0];
+      if (hit) return prefix + '.' + hit;
+      if (depth > 0) {
+        for (var i = 0; i < keys.length; i++) {
+          if (isObj(obj[keys[i]])) {
+            var deep = find(obj[keys[i]], prefix + '.' + keys[i], test, depth - 1);
+            if (deep) return deep;
+          }
+        }
+      }
+      return null;
+    }
+    out.token = find(example, '$', /^(access_token|accessToken)$/i, 2) || find(example, '$', /^(id_token|idToken|token|jwt|access-token)$/i, 2) || find(example, '$', /token/i, 2);
+    out.expires = find(example, '$', /^(expires_in|expiresIn|expires|expiry|ttl)$/i, 2);
+    return out;
   }
 
   var api = {
@@ -1539,7 +1603,7 @@
     read: {
       operations: operations, servers: serverUrls, parseBase: parseBase, auth: authOf,
       guessLogin: guessLogin, guessTarget: guessTarget, request: requestFor,
-      custom: customRequest, body: bodyFor, loginDefaults: loginDefaults
+      custom: customRequest, body: bodyFor, loginDefaults: loginDefaults, usesBasic: usesBasic
     }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

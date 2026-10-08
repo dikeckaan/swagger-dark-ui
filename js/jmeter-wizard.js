@@ -201,7 +201,7 @@
         refresh: 'once',
         ttlMinutes: 30,
         csv: { file: 'credentials.csv', variable: 'apiKey' },
-        login: J.read.loginDefaults(doc, authInfo, authInfo.oauth ? null : loginOp),
+        login: J.read.loginDefaults(doc, loginOp ? { oauth: null } : authInfo, loginOp),
         login2: null
       },
       checks: { allow3xx: false, extraCodes: '', maxMs: 0, connectMs: 10000, timeoutMs: 30000, rateHeader: '' },
@@ -860,12 +860,18 @@
       }
       var basicWrap = elem('div');
       parent.appendChild(basicWrap);
+      var basicNote = elem('div', 'sdui-wz-warn');
+      basicNote.textContent = 'The document secures this operation with HTTP Basic: the token endpoint expects the client id and secret in the Authorization header. Turn this on and fill them in.';
       checkbox(basicWrap, 'Client id and secret go in a Basic Authorization header', lg.basic.on, function (v) { lg.basic.on = v; drawBasic(); },
         'How Apigee\'s OAuthV2 token endpoints expect client credentials. Off = they are in the body below.');
+      basicWrap.appendChild(basicNote);
       var basicGrid = grid(basicWrap);
       function drawBasic() {
         basicGrid.innerHTML = '';
         basicGrid.hidden = !lg.basic.on;
+        var opEntry = null;
+        ops.forEach(function (o) { if (o.id === lg.source) opEntry = o; });
+        basicNote.hidden = lg.basic.on || !(opEntry && J.read.usesBasic(doc, opEntry.op));
         if (!lg.basic.on) return;
         bind(field(basicGrid, 'Client id', textBox(lg.basic.id)), function (v) { lg.basic.id = v.trim(); });
         var sec = field(basicGrid, 'Client secret', textBox(lg.basic.secret), 'Kept out of the remembered answers; it is written into the .jmx.');
