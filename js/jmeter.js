@@ -953,7 +953,8 @@
   function tokenRequest(w, login, target, slot, ttlMinutes) {
     var url = tokenUrl(login, target);
     var prop = 'sduiToken' + slot;
-    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy', 'TOKEN' + (slot ? ' #2' : '') + ' ' + login.method + ' ' + url, true);
+    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy',
+      'TOKEN' + (slot ? ' #2 (the other app, used only by the "another caller" scenario)' : '') + ' ' + login.method + ' ' + url, true);
     var form = /x-www-form-urlencoded/.test(login.contentType);
     var body = login.body || '';
     if (!form) w.bp('HTTPSampler.postBodyRaw', true);
@@ -1068,7 +1069,11 @@
         return '    if (prev.getResponseDataAsString().indexOf(' + jstr(sig) + ') >= 0) { props.putIfAbsent(base + "sig." + ' + jstr(sig) + ', new AtomicLong(0)); ((AtomicLong) props.get(base + "sig." + ' + jstr(sig) + ')).incrementAndGet(); }';
       }).join('\n'),
       '  } else if (cls.equals("other")) {',
-      '    props.putIfAbsent(base + "firstOther", code + " " + prev.getResponseMessage());',
+      '    String body = prev.getResponseDataAsString();',
+      '    if (body == null) body = "";',
+      '    body = body.replaceAll(' + jstr('\\s+') + ', " ").trim();',
+      '    if (body.length() > 300) body = body.substring(0, 300) + "...";',
+      '    props.putIfAbsent(base + "firstOther", code + " " + prev.getResponseMessage() + " <- " + prev.getSampleLabel() + " " + prev.getUrlAsString() + (body.length() > 0 ? " :: " + body : ""));',
       '  }',
       '}'
     ].join('\n');
