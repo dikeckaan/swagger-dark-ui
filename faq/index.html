@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OASForge FAQ — Privacy, Offline Use, Versions and Licensing</title>
+  <meta name="description" content="Answers about OASForge: is it free, does your spec stay in the browser, which OpenAPI versions are supported, offline use, Postman import and commercial licensing." />
+  <link rel="canonical" href="https://oasforge.dev/faq/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="OASForge" />
+  <meta property="og:title" content="OASForge FAQ — Privacy, Offline Use, Versions and Licensing" />
+  <meta property="og:description" content="Answers about OASForge: is it free, does your spec stay in the browser, which OpenAPI versions are supported, offline use, Postman import and commercial licensing." />
+  <meta property="og:url" content="https://oasforge.dev/faq/" />
+  <meta property="og:image" content="https://oasforge.dev/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="OASForge FAQ — Privacy, Offline Use, Versions and Licensing" />
+  <meta name="twitter:description" content="Answers about OASForge: is it free, does your spec stay in the browser, which OpenAPI versions are supported, offline use, Postman import and commercial licensing." />
+  <meta name="twitter:image" content="https://oasforge.dev/og-image.png" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"OASForge","item":"https://oasforge.dev/"},{"@type":"ListItem","position":2,"name":"Frequently asked questions","item":"https://oasforge.dev/faq/"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Is OASForge free?","acceptedAnswer":{"@type":"Answer","text":"Yes. The editor, validator, mock server, converters and exporters are all free to use, with no account and no usage limits. The source code is available on GitHub under the Elastic License 2.0."}},{"@type":"Question","name":"Does my API spec leave my browser?","acceptedAnswer":{"@type":"Answer","text":"No. There is no backend: documents, version history and settings are stored in your browser’s local storage, and the mock server answers requests inside the page. The only network requests are ones you ask for, such as “Load URL” or the live Petstore view."}},{"@type":"Question","name":"Which OpenAPI versions are supported?","acceptedAnswer":{"@type":"Answer","text":"Swagger 2.0 (with a one-click converter to OpenAPI 3), OpenAPI 3.0.x, 3.1.x and 3.2.x. Validation is version-aware: each document is checked against the keys and rules of its own declared version."}},{"@type":"Question","name":"Can I use OASForge offline?","acceptedAnswer":{"@type":"Answer","text":"Yes, two ways. The site is an installable PWA that precaches itself and works fully offline after the first visit. There is also standalone.html — the entire app in one file that runs from a double-click, with no web server."}},{"@type":"Question","name":"Can I import a Postman collection?","acceptedAnswer":{"@type":"Answer","text":"Yes. Open a Postman Collection v2 / v2.1 export via “Open file” or “Load URL” and it is converted to OpenAPI 3.0.3 automatically — auth schemes mapped, saved responses preserved as named examples, transport headers cleaned up."}},{"@type":"Question","name":"Can I test my API’s rate limits from the spec?","acceptedAnswer":{"@type":"Answer","text":"Yes. Export → “JMeter test plan (.jmx)” opens a six-step scenario wizard and writes an Apache JMeter 5.4.3 plan that grades itself. Tell it what limits the API: paste an Apigee Edge Quota or SpikeArrest policy as-is (the allowed count, the window and its type, the identifier, Distributed/Synchronous accuracy and the fault codes are read from the XML; API product JSON works too), state a limit you know, ask it to find one with a staircase, or just load. It derives the scenarios worth proving — walk up to the quota and over it, another caller is not affected, wait for the window and prove it resets, hold a rate under or over the quota, spike-arrest bursts and paced runs — each as its own thread group, run one after another. A token is fetched once in a setUp group (the OAuth 2 tokenUrl from your security schemes is pre-filled) and a tearDown group writes one VERDICT line per scenario, PASS or FAIL against the configuration, on the console and in the results file. Run it with jmeter -n -t api-apigee.jmx -l results.jtl -e -o report, then grep VERDICT results.jtl."}},{"@type":"Question","name":"How is this different from Swagger Editor?","acceptedAnswer":{"@type":"Answer","text":"OASForge adds a native dark theme, a stateful in-browser mock server, one-click quick fixes, a structure insert menu, Postman import, local version history with diff, and full offline support — while keeping the familiar code-plus-preview layout."}},{"@type":"Question","name":"Can I use it commercially?","acceptedAnswer":{"@type":"Answer","text":"Yes — internal tools, client work and embedding are all allowed under the Elastic License 2.0. What is not allowed is offering OASForge itself to third parties as a hosted or managed service, removing the notices, or circumventing license keys."}},{"@type":"Question","name":"Who builds OASForge?","acceptedAnswer":{"@type":"Answer","text":"OASForge — formerly Swagger Dark UI — is designed, built and maintained by Kaan Dikeç as an independent open-source project."}}]}</script>
+  <link rel="icon" href="/swagger-dark-ui/assets/logo.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/swagger-dark-ui/app/icons/icon-180.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/swagger-dark-ui/assets/seo.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/swagger-dark-ui/"><svg width="28" height="28" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Swagger Dark UI logo: an OpenAPI document — curly braces wrapping
+       API routes, each ending in a method-colored endpoint. -->
+  <g fill="none" stroke="#58a6ff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.2 2.6 C5.9 2.6 6.6 5.4 6.3 7.6 C6.1 9.3 5.6 10.6 3.6 12 C5.6 13.4 6.1 14.7 6.3 16.4 C6.6 18.6 5.9 21.4 8.2 21.4"/>
+    <path d="M15.8 2.6 C18.1 2.6 17.4 5.4 17.7 7.6 C17.9 9.3 18.4 10.6 20.4 12 C18.4 13.4 17.9 14.7 17.7 16.4 C17.4 18.6 18.1 21.4 15.8 21.4"/>
+  </g>
+  <g stroke-width="1.7" stroke-linecap="round">
+    <line x1="9.2" y1="8" x2="12.1" y2="8" stroke="#49cc90"/>
+    <line x1="9.2" y1="12" x2="13.3" y2="12" stroke="#61affe"/>
+    <line x1="9.2" y1="16" x2="11.2" y2="16" stroke="#fca130"/>
+  </g>
+  <circle cx="13.7" cy="8" r="1.35" fill="#49cc90"/>
+  <circle cx="14.9" cy="12" r="1.35" fill="#61affe"/>
+  <circle cx="12.8" cy="16" r="1.35" fill="#fca130"/>
+</svg>
+<span><span class="oas">OAS</span>Forge</span></a>
+    <nav aria-label="Site"><a href="/swagger-dark-ui/guide/">Guide</a><a href="/swagger-dark-ui/faq/">FAQ</a><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a><a class="cta" href="/swagger-dark-ui/editor/">Open the editor</a></nav>
+  </header>
+  <main class="content">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/swagger-dark-ui/">OASForge</a><span>/</span>OASForge FAQ</nav>
+    <h1>Frequently asked questions</h1>
+<div class="faq-item"><h2>Is OASForge free?</h2><p>Yes. The editor, validator, mock server, converters and exporters are all free to use, with no account and no usage limits. The source code is available on GitHub under the Elastic License 2.0.</p></div>
+<div class="faq-item"><h2>Does my API spec leave my browser?</h2><p>No. There is no backend: documents, version history and settings are stored in your browser’s local storage, and the mock server answers requests inside the page. The only network requests are ones you ask for, such as “Load URL” or the live Petstore view.</p></div>
+<div class="faq-item"><h2>Which OpenAPI versions are supported?</h2><p>Swagger 2.0 (with a one-click converter to OpenAPI 3), OpenAPI 3.0.x, 3.1.x and 3.2.x. Validation is version-aware: each document is checked against the keys and rules of its own declared version.</p></div>
+<div class="faq-item"><h2>Can I use OASForge offline?</h2><p>Yes, two ways. The site is an installable PWA that precaches itself and works fully offline after the first visit. There is also standalone.html — the entire app in one file that runs from a double-click, with no web server.</p></div>
+<div class="faq-item"><h2>Can I import a Postman collection?</h2><p>Yes. Open a Postman Collection v2 / v2.1 export via “Open file” or “Load URL” and it is converted to OpenAPI 3.0.3 automatically — auth schemes mapped, saved responses preserved as named examples, transport headers cleaned up.</p></div>
+<div class="faq-item"><h2>Can I test my API’s rate limits from the spec?</h2><p>Yes. Export → “JMeter test plan (.jmx)” opens a six-step scenario wizard and writes an Apache JMeter 5.4.3 plan that grades itself. Tell it what limits the API: paste an Apigee Edge Quota or SpikeArrest policy as-is (the allowed count, the window and its type, the identifier, Distributed/Synchronous accuracy and the fault codes are read from the XML; API product JSON works too), state a limit you know, ask it to find one with a staircase, or just load. It derives the scenarios worth proving — walk up to the quota and over it, another caller is not affected, wait for the window and prove it resets, hold a rate under or over the quota, spike-arrest bursts and paced runs — each as its own thread group, run one after another. A token is fetched once in a setUp group (the OAuth 2 tokenUrl from your security schemes is pre-filled) and a tearDown group writes one VERDICT line per scenario, PASS or FAIL against the configuration, on the console and in the results file. Run it with jmeter -n -t api-apigee.jmx -l results.jtl -e -o report, then grep VERDICT results.jtl.</p></div>
+<div class="faq-item"><h2>How is this different from Swagger Editor?</h2><p>OASForge adds a native dark theme, a stateful in-browser mock server, one-click quick fixes, a structure insert menu, Postman import, local version history with diff, and full offline support — while keeping the familiar code-plus-preview layout.</p></div>
+<div class="faq-item"><h2>Can I use it commercially?</h2><p>Yes — internal tools, client work and embedding are all allowed under the Elastic License 2.0. What is not allowed is offering OASForge itself to third parties as a hosted or managed service, removing the notices, or circumventing license keys.</p></div>
+<div class="faq-item"><h2>Who builds OASForge?</h2><p>OASForge — formerly Swagger Dark UI — is designed, built and maintained by Kaan Dikeç as an independent open-source project.</p></div>
+    <div class="cta-block">
+      <p>No signup, no install — the editor runs entirely in your browser.</p>
+      <a class="button" href="/swagger-dark-ui/editor/">Start in the editor</a>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="cols">
+      <div>
+        <h3>OASForge</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/">Home</a></li>
+          <li><a href="/swagger-dark-ui/editor/">Editor</a></li>
+          <li><a href="/swagger-dark-ui/guide/">User guide</a></li>
+          <li><a href="/swagger-dark-ui/faq/">FAQ</a></li>
+          <li><a href="/swagger-dark-ui/standalone.html" download="oasforge-standalone.html">Offline single-file app</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Tools</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/openapi-editor/">Online OpenAPI editor</a></li>
+          <li><a href="/swagger-dark-ui/openapi-validator/">OpenAPI validator</a></li>
+          <li><a href="/swagger-dark-ui/openapi-mock-server/">In-browser mock server</a></li>
+          <li><a href="/swagger-dark-ui/postman-to-openapi/">Postman to OpenAPI converter</a></li>
+          <li><a href="/swagger-dark-ui/swagger-2-to-openapi-3/">Swagger 2.0 to OpenAPI 3</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Guides</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/swagger-ui-dark-theme/">Swagger UI dark theme</a></li>
+          <li><a href="/swagger-dark-ui/openapi-example/">OpenAPI examples</a></li>
+          <li><a href="/swagger-dark-ui/openapi-3-1-vs-3-0/">OpenAPI 3.1 vs 3.0</a></li>
+          <li><a href="/swagger-dark-ui/openapi-3-2/">OpenAPI 3.2 support</a></li>
+          <li><a href="/swagger-dark-ui/swagger-editor-alternative/">Swagger Editor alternative</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Project</h3>
+        <ul>
+          <li><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">Source on GitHub</a></li>
+          <li><a href="https://github.com/dikeckaan/swagger-dark-ui/issues" rel="noopener">Feedback &amp; issues</a></li>
+          <li><a href="/swagger-dark-ui/license/">License (ELv2)</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">© 2026 <a href="https://kaandikec.com" rel="noopener">Kaan Dikeç</a> · OASForge — formerly Swagger Dark UI — is an independent open-source project.</div>
+  </footer>
+</body>
+</html>
