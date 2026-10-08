@@ -402,9 +402,11 @@
       // Finish inside a quarter of the window so the counter cannot reset underneath the run.
       var rpm = Math.min(cap, clamp(Math.ceil(total / Math.max(10, q.windowSeconds / 4) * 60), 60, 6000));
       var tol = q.exact ? 1 : 5;
+      // Start in a fresh window whenever waiting for one is affordable: the
+      // count only proves anything when nothing else used the window first.
       list.push(scenario('quota-edge', {
         overshoot: overshoot, rpm: rpm, users: usersFor(rpm), tolerancePct: tol,
-        freshWindow: false, graceSeconds: q.exact ? 3 : 15
+        freshWindow: q.windowSeconds <= 3600, graceSeconds: q.exact ? 3 : 15
       }, true));
       if (ident.kind === 'header' || ident.kind === 'query' || ident.kind === 'credential') {
         list.push(scenario('quota-isolation', { requests: 3 }, true));
@@ -553,7 +555,9 @@
       out.expectText = ni + ' requests as ' + limits.identifier.label.replace(/^the /, 'a different ') + ' right after the quota is used up: all must pass.';
     } else if ((scn.kind === 'quota-under' || scn.kind === 'quota-over') && q) {
       var factor = Math.max(0.01, num(p.factor, scn.kind === 'quota-under' ? 0.9 : 1.5));
-      var windows = Math.max(0.1, num(p.windows, 1));
+      // A fixed window is only proven across a whole window: a fraction of one
+      // would let the rate "over the quota" pass without ever hitting it.
+      var windows = Math.max(1, num(p.windows, 1));
       var secs = Math.ceil(q.windowSeconds * windows);
       var rate = Math.max(1, Math.round(q.effectiveAllowed / q.windowSeconds * 60 * factor));
       var u = Math.max(1, Math.round(num(p.users, usersFor(rate))));

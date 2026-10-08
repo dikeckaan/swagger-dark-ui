@@ -633,7 +633,7 @@
           : 'The other caller sends the second ' + (limits.identifier.name || 'identifier') + ' value from the Limiter step.'));
       } else if (k === 'quota-under' || k === 'quota-over') {
         nf('Share of the quota', 'factor', 0.01, k === 'quota-under' ? '0.9 = 90% of the allowed rate.' : '1.5 = 150% of the allowed rate.', 0.05);
-        nf('Windows to hold it for', 'windows', 0.1, 'A quota is only proven across a whole window.', 0.5);
+        nf('Windows to hold it for', 'windows', 1, 'A quota is only proven across a whole window.', 1);
         nf('Virtual users', 'users', 1);
         cb('Wait for a fresh window first', 'freshWindow', 'Needed when an earlier scenario used the quota up.');
         if (p.freshWindow) nf('Grace after the reset (s)', 'graceSeconds', 0);
