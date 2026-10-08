@@ -2,15 +2,22 @@ name: Build branch (same build as the deploys)
 
 # Every branch gets the exact build the two deploy workflows run on main —
 # the Cloudflare edition and the GitHub Pages edition, standalone.html
-# included — without touching either production site. The outputs are kept
-# as workflow artifacts, and when the Cloudflare secrets are set the branch
-# is also uploaded as a Worker *version* (not deployed), which gives it a
-# preview URL of its own.
+# included — without touching either production site:
+#
+# - the outputs are kept as workflow artifacts;
+# - the GitHub Pages edition is pushed to a `pages/<branch>` branch, so
+#   Settings -> Pages -> "Deploy from a branch" -> pages/<branch> serves the
+#   whole site (landing page, /app/, guides) exactly like the Actions deploy;
+# - when the Cloudflare secrets are set the branch is also uploaded as a
+#   Worker *version* (not deployed), which gives it a preview URL.
+#
+# A deleted branch takes its pages/<branch> twin with it.
 
 on:
   push:
-    branches-ignore: [main]
+    branches-ignore: ['pages/**']
   pull_request:
+  delete:
   workflow_dispatch:
 
 concurrency:
@@ -18,10 +25,11 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
+    if: github.event_name != 'delete'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -60,12 +68,39 @@ jobs:
           path: dist-cf/standalone.html
           retention-days: 7
 
+      # The GitHub Pages edition as a branch of its own: one orphan commit,
+      # force-pushed, so the history never grows. Pages set to "Deploy from a
+      # branch" -> pages/<branch> then serves the landing page at the root
+      # and the app under /app/, exactly like the deploy from main.
+      - name: Publish the Pages edition to pages/${{ github.ref_name }}
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          BRANCH: ${{ github.ref_name }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          touch dist-pages/.nojekyll
+          cd dist-pages
+          git init -q
+          git checkout -q -b build
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "GitHub Pages build of $BRANCH @ ${GITHUB_SHA::12}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/pages/$BRANCH"
+          echo "Published to pages/$BRANCH"
+          {
+            echo "## Pages build"
+            echo
+            echo "Branch \`pages/$BRANCH\` now holds the GitHub Pages edition of \`$BRANCH\` (\`${GITHUB_SHA::12}\`)."
+            echo "Settings -> Pages -> Deploy from a branch -> \`pages/$BRANCH\` / (root) serves it with the landing page."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Same secrets as deploy-cf.yml; a quiet no-op without them. A version
       # upload does not change what oasforge.dev serves — it only creates a
       # preview URL (…-oasforge.<account>.workers.dev) for this branch.
       - name: Check Cloudflare secrets
         id: cf
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: echo "ok=${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}" >> "$GITHUB_OUTPUT"
       - name: Upload a preview version to Cloudflare Workers
         id: preview
@@ -86,3 +121,18 @@ jobs:
             if [ -n "$url" ]; then echo "- Cloudflare preview: $url"; else echo "- Cloudflare preview: uploaded (see the wrangler output above for the URL)"; fi
             echo "- Artifacts: dist-cf, dist-pages, standalone.html"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Housekeeping: a deleted branch takes its pages/<branch> twin with it.
+  retire:
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch' && !startsWith(github.event.ref, 'pages/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Delete pages/${{ github.event.ref }}
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ github.event.ref }}
+        run: |
+          git push -q "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ":refs/heads/pages/$REF" \
+            && echo "deleted pages/$REF" || echo "pages/$REF did not exist"

@@ -117,7 +117,7 @@ optional live Petstore spec view requires connectivity.
 ├─ vendor/                       # Vendored Swagger UI / CodeMirror / js-yaml / lz-string
 ├─ Dockerfile / docker-compose.yml  # Optional: serve the site locally with nginx (offline)
 ├─ specs/demo-api.yaml           # Comprehensive OpenAPI 3.1 demo spec
-├─ .github/workflows/build.yml   # Same build on every other branch (artifacts + Cloudflare preview)
+├─ .github/workflows/build.yml   # Same build on every branch → artifacts, pages/<branch>, Cloudflare preview
 └─ .github/workflows/deploy.yml  # GitHub Pages deployment
 ```
 
@@ -139,12 +139,17 @@ the root, the app at `/app/`, static `/guide/`, `/faq/` and landing pages,
   `--base /swagger-dark-ui --out dist-pages` so internal links carry the
   sub-path prefix. Canonical URLs point at oasforge.dev, so search signals
   consolidate on the primary domain.
-- **Every other branch** — the [build workflow](.github/workflows/build.yml)
+- **Every branch** — the [build workflow](.github/workflows/build.yml)
   runs both of the builds above on each push (and on pull requests), checks
   the output, and keeps `dist-cf/`, `dist-pages/` and `standalone.html` as
-  workflow artifacts for 7 days. With the Cloudflare secrets set it also
-  uploads the branch as a Worker *version* — a preview URL of its own, with
-  oasforge.dev untouched; the URL is in the job summary.
+  workflow artifacts for 7 days. It also pushes the GitHub Pages edition to
+  a `pages/<branch>` branch (one orphan commit, force-pushed, deleted with
+  its source branch), so *Settings → Pages → Deploy from a branch →
+  `pages/<branch>`* serves the full site — landing page at the root, the
+  app under `/app/` — exactly like the deploy from `main`; the raw source
+  branch only ever serves the bare app. With the Cloudflare secrets set it
+  additionally uploads the branch as a Worker *version* — a preview URL of
+  its own, with oasforge.dev untouched; the URL is in the job summary.
 
 ## Author
 
