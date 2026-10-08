@@ -629,7 +629,7 @@
         nf('Requests as the other caller', 'requests', 1);
         var ik = limits.identifier.kind;
         g.appendChild(elem('p', 'sdui-wz-hint', ik === 'credential'
-          ? 'The other caller is a second credential — set it in the Credential step.'
+          ? 'The counter is per app, so the other caller is a second app: fill its client id / secret under Credential → "The other caller". No second app at hand? Untick this scenario.'
           : 'The other caller sends the second ' + (limits.identifier.name || 'identifier') + ' value from the Limiter step.'));
       } else if (k === 'quota-under' || k === 'quota-over') {
         nf('Share of the quota', 'factor', 0.01, k === 'quota-under' ? '0.9 = 90% of the allowed rate.' : '1.5 = 150% of the allowed rate.', 0.05);
@@ -873,8 +873,118 @@
         bind(sec, function (v) { lg.basic.secret = v; });
       }
       drawBasic();
-      bind(field(parent, second ? 'Body sent to the token endpoint (other app)' : 'Body sent to the token endpoint', textArea(lg.body, 3),
-        /x-www-form-urlencoded/.test(lg.contentType) ? 'Form fields as a=b&c=d.' : 'Sent exactly as written.'), function (v) { lg.body = v; renderNav(); renderFoot(); });
+
+      /* The body as named fields — client_id, client_secret, grant_type,
+         scope … — so a credential is changed in its own box, not by editing
+         a=b&c=d text. The raw body stays reachable underneath. */
+      var fieldsWrap = elem('div', 'sdui-wz-credfields');
+      parent.appendChild(fieldsWrap);
+      var rawWrap = elem('div');
+      rawWrap.hidden = true;
+      parent.appendChild(rawWrap);
+      var tools = elem('div', 'sdui-wz-reqtools');
+      parent.appendChild(tools);
+      linkButton(tools, '+ add a field', function () {
+        var fields = bodyFields(lg);
+        fields.push({ name: '', value: '' });
+        setBodyFields(lg, fields);
+        drawFields();
+      });
+      var rawToggle = linkButton(tools, 'edit the raw body', function () {
+        rawWrap.hidden = !rawWrap.hidden;
+        rawToggle.textContent = rawWrap.hidden ? 'edit the raw body' : 'hide the raw body';
+      });
+      var rawBox = field(rawWrap, second ? 'Body sent to the token endpoint (other app)' : 'Body sent to the token endpoint', textArea(lg.body, 3),
+        /x-www-form-urlencoded/.test(lg.contentType) ? 'Form fields as a=b&c=d.' : 'Sent exactly as written.');
+      bind(rawBox, function (v) { lg.body = v; drawFields(); renderNav(); renderFoot(); });
+
+      function drawFields() {
+        fieldsWrap.innerHTML = '';
+        var fields = bodyFields(lg);
+        if (fields === null) {
+          fieldsWrap.appendChild(elem('p', 'sdui-wz-hint', 'The body is not a form or a flat JSON object, so it is edited as text below.'));
+          rawWrap.hidden = false;
+          return;
+        }
+        var head = elem('p', 'sdui-wz-hint', second
+          ? 'The other app\'s credentials — same endpoint, a different client.'
+          : (fields.length ? 'What the token endpoint receives. Put the real client credentials here' + (lg.basic.on ? ' (or in the Basic header above)' : '') + '.' : 'No body fields yet — add the ones the endpoint expects, e.g. grant_type, client_id, client_secret.'));
+        fieldsWrap.appendChild(head);
+        var g = grid(fieldsWrap);
+        fields.forEach(function (f, i) {
+          var row = elem('div', 'sdui-wz-field');
+          var nameBox = textBox(f.name, 'field name');
+          nameBox.className = 'sdui-wz-credname';
+          var valueBox = textBox(f.value, '');
+          if (/secret|password|passwd|pwd/i.test(f.name)) valueBox.type = 'password';
+          row.appendChild(nameBox);
+          row.appendChild(valueBox);
+          var drop = elem('button', 'sdui-wz-link', 'remove');
+          drop.type = 'button';
+          row.appendChild(drop);
+          g.appendChild(row);
+          bind(nameBox, function (v) {
+            var cur = bodyFields(lg) || [];
+            if (cur[i]) { cur[i].name = v.trim(); setBodyFields(lg, cur); }
+            valueBox.type = /secret|password|passwd|pwd/i.test(v) ? 'password' : 'text';
+            syncRaw();
+          });
+          bind(valueBox, function (v) {
+            var cur = bodyFields(lg) || [];
+            if (cur[i]) { cur[i].value = v; setBodyFields(lg, cur); }
+            syncRaw();
+          });
+          drop.addEventListener('click', function () {
+            var cur = bodyFields(lg) || [];
+            cur.splice(i, 1);
+            setBodyFields(lg, cur);
+            drawFields();
+            syncRaw();
+          });
+        });
+      }
+      function syncRaw() { rawBox.value = lg.body; renderNav(); renderFoot(); }
+      drawFields();
+    }
+
+    /* The token body as [{name, value}] — form text or a flat JSON object;
+       null when it is neither (nested JSON, XML …). */
+    function bodyFields(lg) {
+      var body = lg.body || '';
+      if (/x-www-form-urlencoded/.test(lg.contentType)) {
+        var out = [];
+        body.split('&').forEach(function (pair) {
+          if (!pair) return;
+          var eq = pair.indexOf('=');
+          try {
+            out.push({ name: decodeURIComponent(eq === -1 ? pair : pair.slice(0, eq)).replace(/\+/g, ' '), value: eq === -1 ? '' : decodeURIComponent(pair.slice(eq + 1)).replace(/\+/g, ' ') });
+          } catch (e) { out.push({ name: pair, value: '' }); }
+        });
+        return out;
+      }
+      if (!body.trim()) return [];
+      try {
+        var o = JSON.parse(body);
+        if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+        var flat = [];
+        var ok = Object.keys(o).every(function (k) {
+          var v = o[k];
+          if (v !== null && typeof v === 'object') return false;
+          flat.push({ name: k, value: v === null ? '' : String(v) });
+          return true;
+        });
+        return ok ? flat : null;
+      } catch (e) { return null; }
+    }
+
+    function setBodyFields(lg, fields) {
+      if (/x-www-form-urlencoded/.test(lg.contentType)) {
+        lg.body = fields.map(function (f) { return encodeURIComponent(f.name) + '=' + encodeURIComponent(f.value); }).join('&');
+      } else {
+        var o = {};
+        fields.forEach(function (f) { o[f.name] = f.value; });
+        lg.body = JSON.stringify(o, null, 2);
+      }
     }
 
     /* ----- 6. review ----- */

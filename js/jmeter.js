@@ -1333,11 +1333,11 @@
     if (needsOther) {
       var ik = limits.identifier.kind;
       if ((ik === 'header' || ik === 'query') && !(cfg.limiter.identifier && cfg.limiter.identifier.other)) problems.push('The "another caller" scenario needs a second value for ' + limits.identifier.name + '.');
-      if (ik === 'credential' && cfg.auth.kind === 'static' && !cfg.auth.value2) problems.push('The "another caller" scenario needs a second token / key.');
+      if (ik === 'credential' && cfg.auth.kind === 'static' && !cfg.auth.value2) problems.push('The "another caller" scenario needs a second token / key (Credential step), or untick that scenario under Scenarios.');
       if (ik === 'credential' && cfg.auth.kind === 'login') {
         var l2 = cfg.auth.login2 || {};
         var has2 = l2.basic && l2.basic.on ? !!l2.basic.id : !!l2.body;
-        if (!has2) problems.push('The "another caller" scenario needs the credentials of a second app.');
+        if (!has2) problems.push('The "another caller" scenario needs a second app: fill its client id / secret under Credential → "The other caller", or untick that scenario under Scenarios.');
       }
       if (ik === 'credential' && (cfg.auth.kind === 'csv' || cfg.auth.kind === 'none')) problems.push('The "another caller" scenario needs a single credential plus a second one — not a CSV, and not "none".');
     }

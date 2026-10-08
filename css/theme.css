@@ -1403,6 +1403,16 @@ li.CodeMirror-hint-active { background: var(--accent); color: #fff; }
 .sdui-wz-method-put { background: var(--method-put); }
 .sdui-wz-method-patch { background: var(--method-patch); }
 .sdui-wz-method-delete { background: var(--method-delete); }
+/* token body as fields */
+.sdui-wz-credfields .sdui-wz-grid { grid-template-columns: 1fr; gap: 6px; }
+.sdui-wz-credfields .sdui-wz-field {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 2fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-top: 0;
+}
+.sdui-wz-credname { font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
 /* review */
 .sdui-wz-summary > div + div { margin-top: 4px; }
 .sdui-wz-problems li { color: var(--method-delete); }
