@@ -8,7 +8,7 @@ name: Build branch (same build as the deploys)
 
 on:
   push:
-    branches-ignore: ['pages/**']
+    branches-ignore: ['gh-pages', 'pages/**']
   pull_request:
   workflow_dispatch:
 
@@ -65,5 +65,5 @@ jobs:
             echo
             echo "- Branch: \`${{ github.ref_name }}\` (\`${{ github.sha }}\`)"
             echo "- Artifacts: dist-cf, dist-pages, standalone.html"
-            echo "- To serve this branch on GitHub Pages: Actions -> Deploy to GitHub Pages -> Run workflow -> pick \`${{ github.ref_name }}\`."
+            echo "- To serve this branch on GitHub Pages (landing page included): Actions -> Deploy to GitHub Pages -> Run workflow -> pick \`${{ github.ref_name }}\`."
           } >> "$GITHUB_STEP_SUMMARY"

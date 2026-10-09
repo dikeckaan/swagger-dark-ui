@@ -137,16 +137,23 @@ the root, the app at `/app/`, static `/guide/`, `/faq/` and landing pages,
   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets are
   set (or connect the repo to Cloudflare Workers Builds instead).
 - **GitHub Pages mirror** (`kaandikec.com/swagger-dark-ui`) — **the branch
-  you choose.** The [Pages workflow](.github/workflows/deploy.yml) runs the
-  same script with `--base /swagger-dark-ui --out dist-pages` so internal
-  links carry the sub-path prefix (Pages source set to *GitHub Actions*).
-  Pick the branch with *Actions → Deploy to GitHub Pages → Run workflow*
-  (the branch in the dropdown, or the `branch` input): it is deployed at
-  once and remembered in the `PAGES_BRANCH` repository variable, so every
-  later push to that branch redeploys the mirror until another branch is
-  chosen. With no choice made the mirror follows `main`; pushes to any
-  other branch leave it alone. Canonical URLs point at oasforge.dev, so
-  search signals consolidate on the primary domain.
+  you choose, built like oasforge.dev.** The
+  [Pages workflow](.github/workflows/deploy.yml) runs the same script with
+  `--base /swagger-dark-ui --out dist-pages` so internal links carry the
+  sub-path prefix, and force-pushes the result (landing page at the root,
+  the app under `/app/`, guides, `standalone.html`) to the `gh-pages`
+  branch as one orphan commit; GitHub publishes that branch. Pages must
+  therefore be set to *Deploy from a branch → gh-pages / (root)* — the
+  workflow sets this itself when its token may, and tells you in the job
+  summary otherwise. (Serving a source branch directly shows the bare app
+  with no landing page.) Pick the branch with *Actions → Deploy to GitHub
+  Pages → Run workflow* (the branch in the dropdown, or the `branch`
+  input): it is built at once and remembered in the `PAGES_BRANCH`
+  repository variable, so every later push to that branch redeploys the
+  mirror until another branch is chosen. With no choice made the mirror
+  follows `main`; pushes to any other branch leave it alone. Canonical URLs
+  point at oasforge.dev, so search signals consolidate on the primary
+  domain.
 - **Every branch** — the [build workflow](.github/workflows/build.yml)
   runs both of the builds above on each push (and on pull requests), checks
   the output, and keeps `dist-cf/`, `dist-pages/` and `standalone.html` as

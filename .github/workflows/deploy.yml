@@ -1,17 +1,26 @@
 name: Deploy to GitHub Pages
 
 # The GitHub Pages mirror (kaandikec.com/swagger-dark-ui) serves ONE chosen
-# branch; oasforge.dev on Cloudflare is always main (deploy-cf.yml).
+# branch, built exactly like oasforge.dev: landing page at the root, the app
+# under /app/, guides, standalone.html. oasforge.dev itself is always main
+# (deploy-cf.yml).
+#
+# How it works: the chosen branch is built with build-cf.js and the output is
+# force-pushed to the `gh-pages` branch (one orphan commit, so its history
+# never grows); GitHub then publishes that branch. Pages has to be set to
+# "Deploy from a branch" -> gh-pages / (root) — the workflow sets that itself
+# when the token may, and says so in the job summary otherwise. Serving a
+# source branch directly would show the bare app with no landing page.
 #
 # Choosing the branch: Actions -> "Deploy to GitHub Pages" -> Run workflow,
-# pick the branch in the dropdown (or type another one into the `branch`
-# input). That branch is deployed right away and remembered in the
-# PAGES_BRANCH repository variable, so every later push to it redeploys the
-# mirror — until another branch is chosen the same way. With no choice made
-# the mirror follows main. Pushes to any other branch leave Pages alone.
+# pick the branch in the dropdown (or type one into the `branch` input). It
+# is deployed right away and remembered in the PAGES_BRANCH repository
+# variable, so every later push to it redeploys the mirror — until another
+# branch is chosen the same way. With no choice made the mirror follows
+# main. Pushes to any other branch leave Pages alone.
 on:
   push:
-    branches-ignore: ['pages/**']
+    branches-ignore: ['gh-pages', 'pages/**']
   workflow_dispatch:
     inputs:
       branch:
@@ -20,10 +29,9 @@ on:
         default: ''
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-  actions: write   # to remember the chosen branch in the PAGES_BRANCH variable
+  contents: write   # push the built site to gh-pages
+  pages: write      # point the Pages source at gh-pages
+  actions: write    # remember the chosen branch in the PAGES_BRANCH variable
 
 concurrency:
   group: pages
@@ -35,9 +43,6 @@ jobs:
     # a manual run always deploys the branch it was given.
     if: github.event_name == 'workflow_dispatch' || github.ref_name == (vars.PAGES_BRANCH || 'main')
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     env:
       BRANCH: ${{ inputs.branch || github.ref_name }}
     steps:
@@ -47,15 +52,51 @@ jobs:
           ref: ${{ inputs.branch || github.ref_name }}
       - name: Build the site (same build as the Cloudflare edition)
         run: node build-cf.js --base /swagger-dark-ui --out dist-pages
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist-pages
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Check the build
+        run: |
+          test -s dist-pages/index.html
+          test -s dist-pages/app/index.html
+          test -s dist-pages/standalone.html
+          grep -q 'class="landing-bg"' dist-pages/index.html
+
+      # The whole site as one orphan commit on gh-pages, force-pushed: GitHub's
+      # own pages-build-deployment then publishes it.
+      - name: Publish the site to gh-pages
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          sha=$(git rev-parse --short=12 HEAD)
+          touch dist-pages/.nojekyll
+          cd dist-pages
+          git init -q -b build
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "GitHub Pages build of $BRANCH @ $sha"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/gh-pages"
+          echo "gh-pages now holds the build of $BRANCH @ $sha"
+
+      # Pages must publish gh-pages, not a source branch. Set it when the
+      # token is allowed to; otherwise say exactly what to click.
+      - name: Point GitHub Pages at gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          want='{"source":{"branch":"gh-pages","path":"/"}}'
+          current=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '(.build_type // "") + " " + (.source.branch // "") + " " + (.source.path // "")' 2>/dev/null || echo "none")
+          echo "Pages source now: $current"
+          case "$current" in
+            "legacy gh-pages /") echo "Pages already publishes gh-pages." ;;
+            none)
+              echo "$want" | gh api -X POST "repos/$GITHUB_REPOSITORY/pages" --input - >/dev/null \
+                && echo "Pages enabled from gh-pages." \
+                || echo "::warning::Could not enable GitHub Pages. Settings -> Pages -> Build and deployment -> Source: Deploy from a branch, Branch: gh-pages / (root)." ;;
+            *)
+              echo "$want" | gh api -X PUT "repos/$GITHUB_REPOSITORY/pages" --input - >/dev/null \
+                && echo "Pages source switched to gh-pages." \
+                || echo "::warning::Pages still publishes '$current'. Switch it once: Settings -> Pages -> Build and deployment -> Source: Deploy from a branch, Branch: gh-pages / (root). Until then the mirror shows the bare app of that branch without the landing page." ;;
+          esac
+
       - name: Remember the chosen branch (PAGES_BRANCH)
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -74,7 +115,8 @@ jobs:
           {
             echo "## GitHub Pages"
             echo
-            echo "- Deployed branch: \`$BRANCH\`"
-            echo "- The mirror now follows \`$FOLLOWS\`: every push to it redeploys Pages."
+            echo "- Built branch: \`$BRANCH\` → pushed to \`gh-pages\` (landing page at the root, app under /app/)."
+            echo "- The mirror follows \`$FOLLOWS\`: every push to it rebuilds gh-pages."
+            echo "- Pages source must be: Deploy from a branch → gh-pages / (root). See the step above."
             echo "- oasforge.dev (Cloudflare) is deployed from \`main\` only."
           } >> "$GITHUB_STEP_SUMMARY"
