@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Convert Swagger 2.0 to OpenAPI 3 Online — Free, In-Browser | OASForge</title>
+  <meta name="description" content="Paste a Swagger 2.0 document and convert it to OpenAPI 3 in one click: servers, requestBody, response content, components and $refs all rewritten — entirely in your browser." />
+  <link rel="canonical" href="https://oasforge.dev/swagger-2-to-openapi-3/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="OASForge" />
+  <meta property="og:title" content="Convert Swagger 2.0 to OpenAPI 3 Online — Free, In-Browser | OASForge" />
+  <meta property="og:description" content="Paste a Swagger 2.0 document and convert it to OpenAPI 3 in one click: servers, requestBody, response content, components and $refs all rewritten — entirely in your browser." />
+  <meta property="og:url" content="https://oasforge.dev/swagger-2-to-openapi-3/" />
+  <meta property="og:image" content="https://oasforge.dev/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Convert Swagger 2.0 to OpenAPI 3 Online — Free, In-Browser | OASForge" />
+  <meta name="twitter:description" content="Paste a Swagger 2.0 document and convert it to OpenAPI 3 in one click: servers, requestBody, response content, components and $refs all rewritten — entirely in your browser." />
+  <meta name="twitter:image" content="https://oasforge.dev/og-image.png" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"OASForge","item":"https://oasforge.dev/"},{"@type":"ListItem","position":2,"name":"Swagger 2.0 → OpenAPI 3, in one click","item":"https://oasforge.dev/swagger-2-to-openapi-3/"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Swagger 2.0 → OpenAPI 3, in one click","description":"Paste a Swagger 2.0 document and convert it to OpenAPI 3 in one click: servers, requestBody, response content, components and $refs all rewritten — entirely in your browser.","datePublished":"2026-08-27","dateModified":"2026-08-27","mainEntityOfPage":"https://oasforge.dev/swagger-2-to-openapi-3/","image":"https://oasforge.dev/og-image.png","author":{"@type":"Person","name":"Kaan Dikeç","url":"https://kaandikec.com"}}</script>
+  <link rel="icon" href="/swagger-dark-ui/assets/logo.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/swagger-dark-ui/app/icons/icon-180.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/swagger-dark-ui/assets/seo.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/swagger-dark-ui/"><svg width="28" height="28" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Swagger Dark UI logo: an OpenAPI document — curly braces wrapping
+       API routes, each ending in a method-colored endpoint. -->
+  <g fill="none" stroke="#58a6ff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.2 2.6 C5.9 2.6 6.6 5.4 6.3 7.6 C6.1 9.3 5.6 10.6 3.6 12 C5.6 13.4 6.1 14.7 6.3 16.4 C6.6 18.6 5.9 21.4 8.2 21.4"/>
+    <path d="M15.8 2.6 C18.1 2.6 17.4 5.4 17.7 7.6 C17.9 9.3 18.4 10.6 20.4 12 C18.4 13.4 17.9 14.7 17.7 16.4 C17.4 18.6 18.1 21.4 15.8 21.4"/>
+  </g>
+  <g stroke-width="1.7" stroke-linecap="round">
+    <line x1="9.2" y1="8" x2="12.1" y2="8" stroke="#49cc90"/>
+    <line x1="9.2" y1="12" x2="13.3" y2="12" stroke="#61affe"/>
+    <line x1="9.2" y1="16" x2="11.2" y2="16" stroke="#fca130"/>
+  </g>
+  <circle cx="13.7" cy="8" r="1.35" fill="#49cc90"/>
+  <circle cx="14.9" cy="12" r="1.35" fill="#61affe"/>
+  <circle cx="12.8" cy="16" r="1.35" fill="#fca130"/>
+</svg>
+<span><span class="oas">OAS</span>Forge</span></a>
+    <nav aria-label="Site"><a href="/swagger-dark-ui/guide/">Guide</a><a href="/swagger-dark-ui/faq/">FAQ</a><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a><a class="cta" href="/swagger-dark-ui/editor/">Open the editor</a></nav>
+  </header>
+  <main class="content">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/swagger-dark-ui/">OASForge</a><span>/</span>Convert Swagger 2.0 to OpenAPI 3 Online</nav>
+    <h1>Swagger 2.0 → OpenAPI 3, in one click</h1>
+
+<p>Plenty of production APIs still describe themselves in Swagger 2.0. Paste one into OASForge and
+a banner offers the conversion; one click later you have an OpenAPI 3 document, converted entirely
+client-side — the spec never leaves your browser.</p>
+
+<h2>What the converter rewrites</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Swagger 2.0</th><th>OpenAPI 3</th></tr></thead>
+  <tbody>
+    <tr><td><code>host</code> + <code>basePath</code> + <code>schemes</code></td><td><code>servers</code> array</td></tr>
+    <tr><td><code>in: body</code> parameter</td><td><code>requestBody</code> with media-type content</td></tr>
+    <tr><td><code>in: formData</code> parameters</td><td><code>requestBody</code> as form-urlencoded / multipart schema</td></tr>
+    <tr><td><code>produces</code> / <code>consumes</code></td><td>Per-response and per-request <code>content</code> maps</td></tr>
+    <tr><td><code>definitions</code></td><td><code>components.schemas</code></td></tr>
+    <tr><td><code>securityDefinitions</code></td><td><code>components.securitySchemes</code></td></tr>
+    <tr><td><code>#/definitions/*</code> refs</td><td>Rewritten to <code>#/components/schemas/*</code></td></tr>
+  </tbody>
+</table></div>
+
+<h2>Then fix what the converter can't guess</h2>
+<p>Conversion is mechanical; intent isn't. After converting, the version-aware validator points out
+what needs a human: leftover 2.0-isms are flagged with their modern replacements, and most issues
+carry a one-click fix. When you're done, preview the result in Swagger UI, exercise it against the
+in-browser mock server, or export it. Start in the <a href="/swagger-dark-ui/editor/">editor</a>.</p>
+    <nav class="related" aria-label="Related reading">
+      <h2>Related reading</h2>
+      <ul>
+        <li><a href="/swagger-dark-ui/postman-to-openapi/">Convert Postman Collection to OpenAPI 3 Online</a><span>Drop a Postman Collection (v2 / v2.1) export into OASForge and get clean OpenAPI 3.0: auth schemes mapped, saved responses converted to named examples, noise headers removed.</span></li>
+        <li><a href="/swagger-dark-ui/openapi-validator/">OpenAPI Validator Online</a><span>Validate OpenAPI and Swagger specs in the browser: version-aware errors for 2.0, 3.0, 3.1 and 3.2, clickable issues that jump to the line, and one-click quick fixes.</span></li>
+        <li><a href="/swagger-dark-ui/openapi-3-1-vs-3-0/">OpenAPI 3.1 vs 3.0</a><span>The practical differences between OpenAPI 3.0 and 3.1: JSON Schema 2020-12 alignment, the end of nullable, numeric exclusiveMinimum, webhooks — and how a version-aware validator helps.</span></li>
+      </ul>
+    </nav>
+    <div class="cta-block">
+      <p>No signup, no install — the editor runs entirely in your browser.</p>
+      <a class="button" href="/swagger-dark-ui/editor/">Start in the editor</a>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="cols">
+      <div>
+        <h3>OASForge</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/">Home</a></li>
+          <li><a href="/swagger-dark-ui/editor/">Editor</a></li>
+          <li><a href="/swagger-dark-ui/guide/">User guide</a></li>
+          <li><a href="/swagger-dark-ui/faq/">FAQ</a></li>
+          <li><a href="/swagger-dark-ui/standalone.html" download="oasforge-standalone.html">Offline single-file app</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Tools</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/openapi-editor/">Online OpenAPI editor</a></li>
+          <li><a href="/swagger-dark-ui/openapi-validator/">OpenAPI validator</a></li>
+          <li><a href="/swagger-dark-ui/openapi-mock-server/">In-browser mock server</a></li>
+          <li><a href="/swagger-dark-ui/postman-to-openapi/">Postman to OpenAPI converter</a></li>
+          <li><a href="/swagger-dark-ui/swagger-2-to-openapi-3/">Swagger 2.0 to OpenAPI 3</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Guides</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/swagger-ui-dark-theme/">Swagger UI dark theme</a></li>
+          <li><a href="/swagger-dark-ui/openapi-example/">OpenAPI examples</a></li>
+          <li><a href="/swagger-dark-ui/openapi-3-1-vs-3-0/">OpenAPI 3.1 vs 3.0</a></li>
+          <li><a href="/swagger-dark-ui/openapi-3-2/">OpenAPI 3.2 support</a></li>
+          <li><a href="/swagger-dark-ui/swagger-editor-alternative/">Swagger Editor alternative</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Project</h3>
+        <ul>
+          <li><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">Source on GitHub</a></li>
+          <li><a href="https://github.com/dikeckaan/swagger-dark-ui/issues" rel="noopener">Feedback &amp; issues</a></li>
+          <li><a href="/swagger-dark-ui/license/">License (ELv2)</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">© 2026 <a href="https://kaandikec.com" rel="noopener">Kaan Dikeç</a> · OASForge — formerly Swagger Dark UI — is an independent open-source project.</div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "username": "linus",
+  "email": "linus@example.com",
+  "fullName": "Linus Example",
+  "role": "editor",
+  "tags": ["external", "example"],
+  "address": {
+    "street": "10 Kernel Street",
+    "city": "Helsinki",
+    "country": "FI",
+    "postalCode": "00100"
+  }
+}

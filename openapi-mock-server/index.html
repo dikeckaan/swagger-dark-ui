@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>In-Browser OpenAPI Mock Server — Try It Out Offline | OASForge</title>
+  <meta name="description" content="OASForge ships a stateful mock server that runs inside the browser: POST creates records, GET lists them, responses derive from your schemas. No install, no network, no backend." />
+  <link rel="canonical" href="https://oasforge.dev/openapi-mock-server/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="OASForge" />
+  <meta property="og:title" content="In-Browser OpenAPI Mock Server — Try It Out Offline | OASForge" />
+  <meta property="og:description" content="OASForge ships a stateful mock server that runs inside the browser: POST creates records, GET lists them, responses derive from your schemas. No install, no network, no backend." />
+  <meta property="og:url" content="https://oasforge.dev/openapi-mock-server/" />
+  <meta property="og:image" content="https://oasforge.dev/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="In-Browser OpenAPI Mock Server — Try It Out Offline | OASForge" />
+  <meta name="twitter:description" content="OASForge ships a stateful mock server that runs inside the browser: POST creates records, GET lists them, responses derive from your schemas. No install, no network, no backend." />
+  <meta name="twitter:image" content="https://oasforge.dev/og-image.png" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"OASForge","item":"https://oasforge.dev/"},{"@type":"ListItem","position":2,"name":"A mock server that lives inside the page","item":"https://oasforge.dev/openapi-mock-server/"}]}</script>
+  <link rel="icon" href="/swagger-dark-ui/assets/logo.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/swagger-dark-ui/app/icons/icon-180.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/swagger-dark-ui/assets/seo.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/swagger-dark-ui/"><svg width="28" height="28" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Swagger Dark UI logo: an OpenAPI document — curly braces wrapping
+       API routes, each ending in a method-colored endpoint. -->
+  <g fill="none" stroke="#58a6ff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.2 2.6 C5.9 2.6 6.6 5.4 6.3 7.6 C6.1 9.3 5.6 10.6 3.6 12 C5.6 13.4 6.1 14.7 6.3 16.4 C6.6 18.6 5.9 21.4 8.2 21.4"/>
+    <path d="M15.8 2.6 C18.1 2.6 17.4 5.4 17.7 7.6 C17.9 9.3 18.4 10.6 20.4 12 C18.4 13.4 17.9 14.7 17.7 16.4 C17.4 18.6 18.1 21.4 15.8 21.4"/>
+  </g>
+  <g stroke-width="1.7" stroke-linecap="round">
+    <line x1="9.2" y1="8" x2="12.1" y2="8" stroke="#49cc90"/>
+    <line x1="9.2" y1="12" x2="13.3" y2="12" stroke="#61affe"/>
+    <line x1="9.2" y1="16" x2="11.2" y2="16" stroke="#fca130"/>
+  </g>
+  <circle cx="13.7" cy="8" r="1.35" fill="#49cc90"/>
+  <circle cx="14.9" cy="12" r="1.35" fill="#61affe"/>
+  <circle cx="12.8" cy="16" r="1.35" fill="#fca130"/>
+</svg>
+<span><span class="oas">OAS</span>Forge</span></a>
+    <nav aria-label="Site"><a href="/swagger-dark-ui/guide/">Guide</a><a href="/swagger-dark-ui/faq/">FAQ</a><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a><a class="cta" href="/swagger-dark-ui/editor/">Open the editor</a></nav>
+  </header>
+  <main class="content">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/swagger-dark-ui/">OASForge</a><span>/</span>In-Browser OpenAPI Mock Server</nav>
+    <h1>A mock server that lives inside the page</h1>
+
+<p>Most OpenAPI tools render “Try it out” buttons that fail without a real backend. In OASForge the
+default server is a mock implemented in the page itself — requests from Swagger&nbsp;UI are answered
+locally, instantly, offline.</p>
+
+<h2>Stateful, not canned</h2>
+<ul>
+  <li><code>POST</code> to a collection path really creates a record, kept in memory</li>
+  <li><code>GET</code> lists what you created; <code>GET /thing/{id}</code> returns that record</li>
+  <li><code>PUT</code>/<code>PATCH</code> merge updates; <code>DELETE</code> removes — and a later
+      <code>GET</code> honestly 404s</li>
+  <li>Endpoints without stored data answer with examples derived from your response schemas
+      (<code>$ref</code>s resolved, formats respected)</li>
+  <li>Everything else echoes the request back, httpbin-style, so you can inspect what was sent</li>
+</ul>
+
+<h2>Testing error paths</h2>
+<p>Two request headers steer the mock: <code>X-Mock-Status</code> forces any status code documented
+on the operation (test your 400s and 502s without breaking anything), and <code>X-Mock-Delay</code>
+adds artificial latency for spinner and timeout testing.</p>
+
+<h2>Why in-browser matters</h2>
+<p>Nothing to install, nothing to run, nothing to secure. Spec reviews, client demos, workshops and
+interviews all work from a single browser tab — or from the
+<a href="/swagger-dark-ui/standalone.html" download="oasforge-standalone.html">offline single-file build</a> on a machine with no internet at all.
+A live httpbin.org server stays selectable when you want to hit something real.</p>
+    <nav class="related" aria-label="Related reading">
+      <h2>Related reading</h2>
+      <ul>
+        <li><a href="/swagger-dark-ui/openapi-editor/">Free Online OpenAPI Editor with Dark Mode</a><span>Write OpenAPI 3.0, 3.1 and 3.2 specs in a free online editor with live Swagger UI preview, validation, autocomplete and quick fixes.</span></li>
+        <li><a href="/swagger-dark-ui/openapi-example/">OpenAPI Example</a><span>A minimal OpenAPI example you can copy, plus a full-feature OpenAPI 3.1 demo spec covering auth, callbacks, webhooks, oneOf/allOf and more — all editable live in the browser.</span></li>
+        <li><a href="/swagger-dark-ui/swagger-editor-alternative/">Swagger Editor Alternative</a><span>Looking for a Swagger Editor alternative? OASForge adds a dark theme, an in-browser mock server, Postman import, quick fixes and full offline support — free, with public source code.</span></li>
+      </ul>
+    </nav>
+    <div class="cta-block">
+      <p>No signup, no install — the editor runs entirely in your browser.</p>
+      <a class="button" href="/swagger-dark-ui/editor/">Start in the editor</a>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="cols">
+      <div>
+        <h3>OASForge</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/">Home</a></li>
+          <li><a href="/swagger-dark-ui/editor/">Editor</a></li>
+          <li><a href="/swagger-dark-ui/guide/">User guide</a></li>
+          <li><a href="/swagger-dark-ui/faq/">FAQ</a></li>
+          <li><a href="/swagger-dark-ui/standalone.html" download="oasforge-standalone.html">Offline single-file app</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Tools</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/openapi-editor/">Online OpenAPI editor</a></li>
+          <li><a href="/swagger-dark-ui/openapi-validator/">OpenAPI validator</a></li>
+          <li><a href="/swagger-dark-ui/openapi-mock-server/">In-browser mock server</a></li>
+          <li><a href="/swagger-dark-ui/postman-to-openapi/">Postman to OpenAPI converter</a></li>
+          <li><a href="/swagger-dark-ui/swagger-2-to-openapi-3/">Swagger 2.0 to OpenAPI 3</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Guides</h3>
+        <ul>
+          <li><a href="/swagger-dark-ui/swagger-ui-dark-theme/">Swagger UI dark theme</a></li>
+          <li><a href="/swagger-dark-ui/openapi-example/">OpenAPI examples</a></li>
+          <li><a href="/swagger-dark-ui/openapi-3-1-vs-3-0/">OpenAPI 3.1 vs 3.0</a></li>
+          <li><a href="/swagger-dark-ui/openapi-3-2/">OpenAPI 3.2 support</a></li>
+          <li><a href="/swagger-dark-ui/swagger-editor-alternative/">Swagger Editor alternative</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Project</h3>
+        <ul>
+          <li><a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">Source on GitHub</a></li>
+          <li><a href="https://github.com/dikeckaan/swagger-dark-ui/issues" rel="noopener">Feedback &amp; issues</a></li>
+          <li><a href="/swagger-dark-ui/license/">License (ELv2)</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">© 2026 <a href="https://kaandikec.com" rel="noopener">Kaan Dikeç</a> · OASForge — formerly Swagger Dark UI — is an independent open-source project.</div>
+  </footer>
+</body>
+</html>
