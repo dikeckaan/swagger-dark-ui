@@ -1,0 +1,47 @@
+/standalone
+  Content-Disposition: attachment; filename="oasforge-standalone.html"
+/standalone.html
+  Content-Disposition: attachment; filename="oasforge-standalone.html"
+/
+  Content-Type: text/html; charset=utf-8
+/app/
+  Content-Type: text/html; charset=utf-8
+/editor/
+  Content-Type: text/html; charset=utf-8
+/guide/
+  Content-Type: text/html; charset=utf-8
+/faq/
+  Content-Type: text/html; charset=utf-8
+/license/
+  Content-Type: text/html; charset=utf-8
+/openapi-editor/
+  Content-Type: text/html; charset=utf-8
+/openapi-validator/
+  Content-Type: text/html; charset=utf-8
+/swagger-editor-alternative/
+  Content-Type: text/html; charset=utf-8
+/postman-to-openapi/
+  Content-Type: text/html; charset=utf-8
+/openapi-mock-server/
+  Content-Type: text/html; charset=utf-8
+/swagger-ui-dark-theme/
+  Content-Type: text/html; charset=utf-8
+/openapi-example/
+  Content-Type: text/html; charset=utf-8
+/openapi-3-1-vs-3-0/
+  Content-Type: text/html; charset=utf-8
+/openapi-3-2/
+  Content-Type: text/html; charset=utf-8
+/swagger-2-to-openapi-3/
+  Content-Type: text/html; charset=utf-8
+/app/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+/app/icons/*
+  Cache-Control: public, max-age=86400
+/og-image.png
+  Cache-Control: public, max-age=86400
+/assets/*
+  Cache-Control: public, max-age=86400
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
