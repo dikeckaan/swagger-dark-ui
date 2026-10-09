@@ -148,9 +148,9 @@ the root, the app at `/app/`, static `/guide/`, `/faq/` and landing pages,
   summary otherwise. (Serving a source branch directly shows the bare app
   with no landing page.) Pick the branch with *Actions → Deploy to GitHub
   Pages → Run workflow* (the branch in the dropdown, or the `branch`
-  input): it is built at once and remembered in the `PAGES_BRANCH`
-  repository variable, so every later push to that branch redeploys the
-  mirror until another branch is chosen. With no choice made the mirror
+  input): it is built at once and its name is written to `.source-branch`
+  on `gh-pages`, so every later push to that branch redeploys the mirror
+  until another branch is chosen. With no choice made the mirror
   follows `main`; pushes to any other branch leave it alone. Canonical URLs
   point at oasforge.dev, so search signals consolidate on the primary
   domain.

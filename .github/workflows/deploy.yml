@@ -14,8 +14,8 @@ name: Deploy to GitHub Pages
 #
 # Choosing the branch: Actions -> "Deploy to GitHub Pages" -> Run workflow,
 # pick the branch in the dropdown (or type one into the `branch` input). It
-# is deployed right away and remembered in the PAGES_BRANCH repository
-# variable, so every later push to it redeploys the mirror — until another
+# is deployed right away and its name is written to `.source-branch` on
+# gh-pages, so every later push to it redeploys the mirror — until another
 # branch is chosen the same way. With no choice made the mirror follows
 # main. Pushes to any other branch leave Pages alone.
 on:
@@ -31,7 +31,6 @@ on:
 permissions:
   contents: write   # push the built site to gh-pages
   pages: write      # point the Pages source at gh-pages
-  actions: write    # remember the chosen branch in the PAGES_BRANCH variable
 
 concurrency:
   group: pages
@@ -39,9 +38,6 @@ concurrency:
 
 jobs:
   deploy:
-    # A push deploys only when it lands on the chosen branch (main by default);
-    # a manual run always deploys the branch it was given.
-    if: github.event_name == 'workflow_dispatch' || github.ref_name == (vars.PAGES_BRANCH || 'main')
     runs-on: ubuntu-latest
     env:
       BRANCH: ${{ inputs.branch || github.ref_name }}
@@ -50,9 +46,31 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch || github.ref_name }}
+
+      # A push deploys only when it lands on the branch the mirror follows:
+      # the one named in .source-branch on gh-pages, main when there is none.
+      # A manual run always deploys the branch it was given.
+      - name: Is this the branch the mirror follows?
+        id: chosen
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          follows=$( (git fetch -q --depth 1 origin gh-pages && git show FETCH_HEAD:.source-branch) 2>/dev/null | tr -d '[:space:]' || true)
+          follows=${follows:-main}
+          echo "The mirror follows: $follows"
+          if [ "$follows" = "$BRANCH" ]; then
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "yes=false" >> "$GITHUB_OUTPUT"
+            echo "Not the followed branch — nothing to deploy. To serve $BRANCH: Actions -> Deploy to GitHub Pages -> Run workflow -> pick it."
+          fi
       - name: Build the site (same build as the Cloudflare edition)
+        if: steps.chosen.outputs.yes == 'true'
         run: node build-cf.js --base /swagger-dark-ui --out dist-pages
       - name: Check the build
+        if: steps.chosen.outputs.yes == 'true'
         run: |
           test -s dist-pages/index.html
           test -s dist-pages/app/index.html
@@ -60,14 +78,17 @@ jobs:
           grep -q 'class="landing-bg"' dist-pages/index.html
 
       # The whole site as one orphan commit on gh-pages, force-pushed: GitHub's
-      # own pages-build-deployment then publishes it.
+      # own pages-build-deployment then publishes it. .source-branch records
+      # which branch the mirror follows from now on.
       - name: Publish the site to gh-pages
+        if: steps.chosen.outputs.yes == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           sha=$(git rev-parse --short=12 HEAD)
           touch dist-pages/.nojekyll
+          printf '%s\n' "$BRANCH" > dist-pages/.source-branch
           cd dist-pages
           git init -q -b build
           git add -A
@@ -79,6 +100,7 @@ jobs:
       # Pages must publish gh-pages, not a source branch. Set it when the
       # token is allowed to; otherwise say exactly what to click.
       - name: Point GitHub Pages at gh-pages
+        if: steps.chosen.outputs.yes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -97,26 +119,14 @@ jobs:
                 || echo "::warning::Pages still publishes '$current'. Switch it once: Settings -> Pages -> Build and deployment -> Source: Deploy from a branch, Branch: gh-pages / (root). Until then the mirror shows the bare app of that branch without the landing page." ;;
           esac
 
-      - name: Remember the chosen branch (PAGES_BRANCH)
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh variable set PAGES_BRANCH --body "$BRANCH" --repo "$GITHUB_REPOSITORY"; then
-            echo "GitHub Pages now follows \`$BRANCH\`: every push to it redeploys the mirror." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning::Could not store PAGES_BRANCH; set it by hand under Settings -> Secrets and variables -> Actions -> Variables (value: $BRANCH) so pushes to that branch keep redeploying Pages."
-            echo "Deployed \`$BRANCH\`, but the choice could not be remembered — set the repository variable PAGES_BRANCH=$BRANCH by hand." >> "$GITHUB_STEP_SUMMARY"
-          fi
       - name: Summary
-        env:
-          FOLLOWS: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || (github.event_name == 'workflow_dispatch' && github.ref_name) || vars.PAGES_BRANCH || 'main' }}
+        if: steps.chosen.outputs.yes == 'true'
         run: |
           {
             echo "## GitHub Pages"
             echo
             echo "- Built branch: \`$BRANCH\` → pushed to \`gh-pages\` (landing page at the root, app under /app/)."
-            echo "- The mirror follows \`$FOLLOWS\`: every push to it rebuilds gh-pages."
+            echo "- The mirror now follows \`$BRANCH\`: every push to it rebuilds gh-pages, until another branch is chosen with Run workflow."
             echo "- Pages source must be: Deploy from a branch → gh-pages / (root). See the step above."
             echo "- oasforge.dev (Cloudflare) is deployed from \`main\` only."
           } >> "$GITHUB_STEP_SUMMARY"
