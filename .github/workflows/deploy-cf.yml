@@ -1,5 +1,8 @@
 name: Deploy OASForge to Cloudflare
 
+# oasforge.dev is deployed from main and from nothing else: no other branch
+# touches the Cloudflare Worker (the GitHub Pages mirror is the place to
+# preview a branch — see deploy.yml). A manual run deploys main as well.
 on:
   push:
     branches: [main]
@@ -16,8 +19,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
       # The workflow is a quiet no-op until the Cloudflare secrets are set
       # (repo Settings -> Secrets and variables -> Actions):
       #   CLOUDFLARE_API_TOKEN   - token with the "Edit Cloudflare Workers" template

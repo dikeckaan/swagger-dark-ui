@@ -80,8 +80,8 @@ Download **[standalone.html](https://kaandikec.com/swagger-dark-ui/standalone.ht
 no web server, no network, nothing else to install. Every script, style,
 vendored library and the demo spec are inlined; the in-browser mock keeps
 "Try it out" working. The file is rebuilt by the Pages workflow on every
-push to `main` (`build-standalone.js`), so the download is always current
-with the live site.
+deploy (`build-standalone.js`), so the download is always current with the
+mirror.
 
 ### Run with Docker
 
@@ -117,8 +117,9 @@ optional live Petstore spec view requires connectivity.
 ├─ vendor/                       # Vendored Swagger UI / CodeMirror / js-yaml / lz-string
 ├─ Dockerfile / docker-compose.yml  # Optional: serve the site locally with nginx (offline)
 ├─ specs/demo-api.yaml           # Comprehensive OpenAPI 3.1 demo spec
-├─ .github/workflows/build.yml   # Same build on every branch → artifacts, pages/<branch>, Cloudflare preview
-└─ .github/workflows/deploy.yml  # GitHub Pages deployment
+├─ .github/workflows/build.yml   # Same build on every branch → checked, kept as artifacts
+├─ .github/workflows/deploy-cf.yml  # oasforge.dev (Cloudflare) — main only
+└─ .github/workflows/deploy.yml  # GitHub Pages mirror — the branch you choose
 ```
 
 ## Deployment
@@ -126,33 +127,30 @@ optional live Petstore spec view requires connectivity.
 Both deployments publish the **same build** (`build-cf.js`: landing page at
 the root, the app at `/app/`, static `/guide/`, `/faq/` and landing pages,
 `sitemap.xml`, `robots.txt`, cache headers and the single-file
-`standalone.html`) on every push to `main`:
+`standalone.html`), from different branches:
 
-- **Cloudflare** ([oasforge.dev](https://oasforge.dev/)) — the
-  [Cloudflare workflow](.github/workflows/deploy-cf.yml) builds `dist-cf/` and
-  deploys it with Wrangler as an **assets-only Worker** (static asset requests
-  are free and unmetered on every Workers plan). A no-op until the
+- **Cloudflare** ([oasforge.dev](https://oasforge.dev/)) — **`main` only.**
+  The [Cloudflare workflow](.github/workflows/deploy-cf.yml) builds `dist-cf/`
+  on every push to `main` and deploys it with Wrangler as an **assets-only
+  Worker** (static asset requests are free and unmetered on every Workers
+  plan). No other branch ever touches the Worker. A no-op until the
   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets are
   set (or connect the repo to Cloudflare Workers Builds instead).
-- **GitHub Pages mirror** (`kaandikec.com/swagger-dark-ui`) — the
-  [Pages workflow](.github/workflows/deploy.yml) runs the same script with
-  `--base /swagger-dark-ui --out dist-pages` so internal links carry the
-  sub-path prefix. It deploys **whichever branch was pushed last** (Pages
-  source set to *GitHub Actions*), so the mirror doubles as the preview of
-  the branch being worked on; `main` goes live there again on its next push
-  or a manual *Run workflow*. Canonical URLs point at oasforge.dev, so
+- **GitHub Pages mirror** (`kaandikec.com/swagger-dark-ui`) — **the branch
+  you choose.** The [Pages workflow](.github/workflows/deploy.yml) runs the
+  same script with `--base /swagger-dark-ui --out dist-pages` so internal
+  links carry the sub-path prefix (Pages source set to *GitHub Actions*).
+  Pick the branch with *Actions → Deploy to GitHub Pages → Run workflow*
+  (the branch in the dropdown, or the `branch` input): it is deployed at
+  once and remembered in the `PAGES_BRANCH` repository variable, so every
+  later push to that branch redeploys the mirror until another branch is
+  chosen. With no choice made the mirror follows `main`; pushes to any
+  other branch leave it alone. Canonical URLs point at oasforge.dev, so
   search signals consolidate on the primary domain.
 - **Every branch** — the [build workflow](.github/workflows/build.yml)
   runs both of the builds above on each push (and on pull requests), checks
   the output, and keeps `dist-cf/`, `dist-pages/` and `standalone.html` as
-  workflow artifacts for 7 days. It also pushes the GitHub Pages edition to
-  a `pages/<branch>` branch (one orphan commit, force-pushed, deleted with
-  its source branch), for the case where Pages is set to *Deploy from a
-  branch*: `pages/<branch>` then serves the full site — landing page at the
-  root, the app under `/app/` — while the raw source branch only ever serves
-  the bare app. With the Cloudflare secrets set it
-  additionally uploads the branch as a Worker *version* — a preview URL of
-  its own, with oasforge.dev untouched; the URL is in the job summary.
+  workflow artifacts for 7 days. It deploys nothing.
 
 ## Author
 
