@@ -7,7 +7,7 @@
    straight to the network. */
 'use strict';
 
-var CACHE = 'sdui-v4'; // bumped: JMeter scenario generator rewrite
+var CACHE = 'sdui-v5'; // bumped: JMeter plan carries a single token
 
 var SHELL = [
   './',

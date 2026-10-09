@@ -421,7 +421,10 @@
         overshoot: overshoot, rpm: rpm, users: usersFor(rpm), tolerancePct: tol,
         freshWindow: q.windowSeconds <= 3600, graceSeconds: q.exact ? 3 : 15
       }, true));
-      if (ident.kind === 'header' || ident.kind === 'query' || ident.kind === 'credential') {
+      // The plan carries exactly one token, so "another caller" exists only
+      // where the counter is keyed by a header or query value the plan can
+      // vary — never by a second credential.
+      if (ident.kind === 'header' || ident.kind === 'query') {
         list.push(scenario('quota-isolation', { requests: 3 }, true));
       }
       list.push(scenario('quota-reset', { requests: 3, graceSeconds: q.exact ? 3 : 15 }, !longWindow));
@@ -559,7 +562,7 @@
       out.seconds = q.windowSeconds + num(p.graceSeconds, 5) + n;
       out.expect = { rule: 'all-pass' };
       out.expectText = 'Waits ' + resetWaitText(q, num(p.graceSeconds, 5)) + ', then ' + n + ' requests that must all pass.';
-    } else if (scn.kind === 'quota-isolation' && q) {
+    } else if (scn.kind === 'quota-isolation' && q && (limits.identifier.kind === 'header' || limits.identifier.kind === 'query')) {
       var ni = Math.max(1, Math.round(num(p.requests, 3)));
       out.groups.push({ name: key + ' — ' + info.title, threads: 1, loops: ni, mode: 'paced', rpm: probeRpm, identity: 'other' });
       out.requests = ni;
@@ -962,12 +965,11 @@
 
   /* The token call: extractor for the token (and expires_in when present)
      and the post-processor that hands both to every thread as properties.
-     `slot` is '' for the main identity and '2' for the second one. */
-  function tokenRequest(w, login, target, slot, ttlMinutes) {
+     There is exactly one token in a plan; every scenario reuses it. */
+  function tokenRequest(w, login, target, ttlMinutes) {
     var url = tokenUrl(login, target);
-    var prop = 'sduiToken' + slot;
-    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy',
-      'TOKEN' + (slot ? ' #2 (the other app, used only by the "another caller" scenario)' : '') + ' ' + login.method + ' ' + url, true);
+    var prop = 'sduiToken';
+    el(w, 'HTTPSamplerProxy', 'HttpTestSampleGui', 'HTTPSamplerProxy', 'TOKEN ' + login.method + ' ' + url, true);
     var form = /x-www-form-urlencoded/.test(login.contentType);
     var body = login.body || '';
     if (!form) w.bp('HTTPSampler.postBodyRaw', true);
@@ -1012,16 +1014,16 @@
       'if (exp != null && !exp.equals("NONE") && exp.trim().length() > 0) { try { ttl = Long.parseLong(exp.trim()) * 900L; } catch (Exception e) {} }\n' +
       'props.put(' + jstr(prop + 'Ttl') + ', String.valueOf(ttl));\n' +
       'if (t == null || t.equals("TOKEN_NOT_FOUND")) {\n' +
-      '  log.error("TOKEN' + (slot ? ' #2' : '') + ': no token in the response — check the JSON path and the credentials. Status " + prev.getResponseCode());\n' +
-      '  System.out.println("TOKEN' + (slot ? ' #2' : '') + ' FAILED: " + prev.getResponseCode() + " " + prev.getResponseDataAsString());\n' +
+      '  log.error("TOKEN: no token in the response — check the JSON path and the credentials. Status " + prev.getResponseCode());\n' +
+      '  System.out.println("TOKEN FAILED: " + prev.getResponseCode() + " " + prev.getResponseDataAsString());\n' +
       '} else {\n' +
-      '  log.info("TOKEN' + (slot ? ' #2' : '') + ' acquired, valid for about " + (ttl / 60000) + " min");\n' +
-      '  System.out.println("TOKEN' + (slot ? ' #2' : '') + ' acquired (" + t.length() + " chars), valid for about " + (ttl / 60000) + " min");\n' +
+      '  log.info("TOKEN acquired, valid for about " + (ttl / 60000) + " min");\n' +
+      '  System.out.println("TOKEN acquired (" + t.length() + " chars), valid for about " + (ttl / 60000) + " min");\n' +
       '}');
     w.close('</hashTree>');
   }
 
-  function setupTokenGroup(w, cfg, target, withSecond) {
+  function setupTokenGroup(w, cfg, target) {
     el(w, 'SetupThreadGroup', 'SetupThreadGroupGui', 'SetupThreadGroup', 'setUp — fetch the token once, before any load', true);
     w.sp('ThreadGroup.on_sample_error', 'stoptest');
     loopController(w, '1');
@@ -1032,8 +1034,7 @@
     w.sp('ThreadGroup.delay', '');
     w.close('</SetupThreadGroup>');
     w.open('<hashTree>');
-    tokenRequest(w, cfg.auth.login, target, '', cfg.auth.ttlMinutes);
-    if (withSecond) tokenRequest(w, cfg.auth.login2, target, '2', cfg.auth.ttlMinutes);
+    tokenRequest(w, cfg.auth.login, target, cfg.auth.ttlMinutes);
     w.close('</hashTree>');
   }
 
@@ -1049,7 +1050,7 @@
     w.bp('IfController.useExpression', true);
     w.close('</IfController>');
     w.open('<hashTree>');
-    tokenRequest(w, cfg.auth.login, target, '', cfg.auth.ttlMinutes);
+    tokenRequest(w, cfg.auth.login, target, cfg.auth.ttlMinutes);
     w.close('</hashTree>');
     w.close('</hashTree>');
   }
@@ -1212,10 +1213,9 @@
     // Headers for this scenario: Accept, the credential, the identifier.
     var headers = [{ name: 'Accept', value: 'application/json' }];
     var ident = ctx.limits.identifier;
-    // "The other caller" is a second credential only when the counter is per
-    // credential; otherwise it is the same credential with another identifier.
-    var otherCred = g.identity === 'other' && ident.kind === 'credential';
-    var auth = authHeader(cfg, otherCred);
+    // "The other caller" is the same credential (the one token) with the
+    // second identifier value; the plan never carries a second credential.
+    var auth = authHeader(cfg);
     if (auth) headers.push(auth);
     var extraQuery = [];
     var idc = cfg.limiter.identifier || {};
@@ -1223,7 +1223,7 @@
     if (ident.kind === 'header' && ident.name && identValue) headers.push({ name: ident.name, value: identValue });
     if (ident.kind === 'query' && ident.name && identValue) extraQuery.push({ name: ident.name, value: identValue });
     if (cfg.auth.kind === 'static' && ctx.authOf.queryName) {
-      extraQuery.push({ name: ctx.authOf.queryName, value: otherCred ? '${__P(token2,' + (cfg.auth.value2 || 'SECOND_KEY') + ')}' : '${__P(token,' + (cfg.auth.value || 'PASTE_YOUR_TOKEN') + ')}' });
+      extraQuery.push({ name: ctx.authOf.queryName, value: '${__P(token,' + (cfg.auth.value || 'PASTE_YOUR_TOKEN') + ')}' });
     }
     headerManager(w, headers, 'Headers for ' + scn.key);
 
@@ -1266,9 +1266,9 @@
       w.leaf();
     }
 
-    if (cfg.auth.kind === 'login' && g.identity !== 'other') {
+    if (cfg.auth.kind === 'login') {
       if (cfg.auth.refresh === 'expiry') refreshBlock(w, cfg, ctx.target);
-      else if (cfg.auth.refresh === 'iteration') tokenRequest(w, cfg.auth.login, ctx.target, '', cfg.auth.ttlMinutes);
+      else if (cfg.auth.refresh === 'iteration') tokenRequest(w, cfg.auth.login, ctx.target, cfg.auth.ttlMinutes);
     }
 
     var active = ctx.active;
@@ -1304,17 +1304,15 @@
     return active.map(function (r) { return Math.round((Math.max(0, r.weight || 0) / total) * 1000) / 10; });
   }
 
-  function authHeader(cfg, other) {
+  function authHeader(cfg) {
     var a = cfg.auth;
     if (a.kind === 'none') return null;
     if (a.kind === 'csv') return { name: a.header, value: a.prefix + '${' + a.csv.variable + '}' };
     if (a.kind === 'static') {
       if (cfg.authQueryName) return null;
-      return other
-        ? { name: a.header, value: a.prefix + '${__P(token2,' + (a.value2 || 'SECOND_KEY') + ')}' }
-        : { name: a.header, value: a.prefix + '${__P(token,' + (a.value || 'PASTE_YOUR_TOKEN') + ')}' };
+      return { name: a.header, value: a.prefix + '${__P(token,' + (a.value || 'PASTE_YOUR_TOKEN') + ')}' };
     }
-    return { name: a.header, value: a.prefix + '${__P(sduiToken' + (other ? '2' : '') + ',NO_TOKEN)}' };
+    return { name: a.header, value: a.prefix + '${__P(sduiToken,NO_TOKEN)}' };
   }
 
   /* ==================================================================
@@ -1348,16 +1346,8 @@
     if (cfg.auth.kind === 'csv' && !(cfg.auth.csv && cfg.auth.csv.file)) problems.push('Name the CSV file the credentials come from.');
     if (cfg.limiter.kind === 'apigee' && !limits.quota && !limits.spike) problems.push('Paste a Quota or SpikeArrest policy, and fill in the values it reads at run time.');
     var needsOther = scns.some(function (s) { return s.kind === 'quota-isolation'; });
-    if (needsOther) {
-      var ik = limits.identifier.kind;
-      if ((ik === 'header' || ik === 'query') && !(cfg.limiter.identifier && cfg.limiter.identifier.other)) problems.push('The "another caller" scenario needs a second value for ' + limits.identifier.name + '.');
-      if (ik === 'credential' && cfg.auth.kind === 'static' && !cfg.auth.value2) problems.push('The "another caller" scenario needs a second token / key (Credential step), or untick that scenario under Scenarios.');
-      if (ik === 'credential' && cfg.auth.kind === 'login') {
-        var l2 = cfg.auth.login2 || {};
-        var has2 = l2.basic && l2.basic.on ? !!l2.basic.id : !!l2.body;
-        if (!has2) problems.push('The "another caller" scenario needs a second app: fill its client id / secret under Credential → "The other caller", or untick that scenario under Scenarios.');
-      }
-      if (ik === 'credential' && (cfg.auth.kind === 'csv' || cfg.auth.kind === 'none')) problems.push('The "another caller" scenario needs a single credential plus a second one — not a CSV, and not "none".');
+    if (needsOther && !(cfg.limiter.identifier && cfg.limiter.identifier.other)) {
+      problems.push('The "another caller" scenario needs a second value for ' + limits.identifier.name + ' (Limiter step).');
     }
     return { limits: limits, scenarios: scns, seconds: seconds, requests: requests, problems: problems, warnings: limits.warnings };
   }
@@ -1379,10 +1369,8 @@
     if (cfg.authQueryName) ctx.authOf.queryName = cfg.authQueryName; else ctx.authOf.queryName = null;
 
     var file = slug(doc) + '-' + (limits.kind === 'apigee' ? 'apigee' : limits.kind === 'known' ? 'quota' : limits.kind === 'unknown' ? 'find-limit' : 'load') + '.jmx';
-    var needsSecondToken = cfg.auth.kind === 'login' && est.scenarios.some(function (s) { return s.kind === 'quota-isolation'; }) && limits.identifier.kind === 'credential';
-
     var knobs = ['-Jhost=' + target.host + ' -Jport=' + target.port + ' -Jprotocol=' + target.protocol];
-    if (cfg.auth.kind === 'static') knobs.push('-Jtoken=…' + (cfg.auth.value2 ? ' -Jtoken2=…' : ''));
+    if (cfg.auth.kind === 'static') knobs.push('-Jtoken=…');
     if (cfg.checks.rateHeader) knobs.push('-Jsample_variables=rateHeader   (writes the ' + cfg.checks.rateHeader + ' header into the .jtl)');
 
     var comments = [planTitle(doc, limits), ''];
@@ -1396,7 +1384,7 @@
     comments.push('Scenarios, run one after another:');
     est.scenarios.forEach(function (s) { comments.push('  ' + s.key + '  ' + s.title + ' — ' + s.expectText); });
     comments.push('', 'About ' + est.requests + ' requests, roughly ' + fmtSeconds(est.seconds) + ' in total.', '');
-    comments.push(describeAuth(cfg, needsSecondToken));
+    comments.push(describeAuth(cfg));
     comments.push('', 'Run it:', '  jmeter -n -t ' + file + ' -l results.jtl -e -o report', '', 'The verdicts are printed on the console and written to results.jtl:', '  grep VERDICT results.jtl', '', 'Overrides that need no editing:');
     knobs.forEach(function (k) { comments.push('  ' + k); });
     comments.push('', 'A response with status ' + limits.limitCodes.join('/').replace(/\\d\\d/g, 'xx') + ' counts as "limited", 2xx' + (cfg.checks.allow3xx ? '/3xx' : '') + ' as "pass"; anything else is an error.');
@@ -1457,7 +1445,7 @@
       w.leaf();
     }
 
-    if (cfg.auth.kind === 'login' && cfg.auth.refresh !== 'iteration') setupTokenGroup(w, cfg, target, needsSecondToken);
+    if (cfg.auth.kind === 'login' && cfg.auth.refresh !== 'iteration') setupTokenGroup(w, cfg, target);
 
     est.scenarios.forEach(function (scn) {
       scn.groups.forEach(function (g) { scenarioGroup(w, ctx, scn, g); });
@@ -1501,7 +1489,7 @@
     return name + ' — load test';
   }
 
-  function describeAuth(cfg, second) {
+  function describeAuth(cfg) {
     var a = cfg.auth;
     if (a.kind === 'none') return 'No credential is sent.';
     if (a.kind === 'csv') return 'Every iteration takes the next credential from ' + a.csv.file + ' (column ' + a.csv.variable + '); put the file next to the .jmx.';
@@ -1509,8 +1497,7 @@
     var when = a.refresh === 'iteration' ? 'before every iteration'
       : a.refresh === 'expiry' ? 'once before the load and again when it is older than its lifetime (expires_in when the endpoint returns one, otherwise ' + a.ttlMinutes + ' min)'
         : 'once, in a setUp thread group, before any load';
-    return 'A token is fetched from ' + a.login.method + ' ' + a.login.url + ' ' + when + ' and sent in the ' + a.header + ' header.' +
-      (second ? ' A second token is fetched for the other app.' : '');
+    return 'One token is fetched from ' + a.login.method + ' ' + a.login.url + ' ' + when + ' and sent in the ' + a.header + ' header by every scenario.';
   }
 
   /* Default login settings for the token endpoint — from the OAuth 2 flow in

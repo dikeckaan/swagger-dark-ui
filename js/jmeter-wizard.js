@@ -142,13 +142,12 @@
     try {
       var copy = JSON.parse(JSON.stringify(cfg));
       copy.auth.value = '';
-      copy.auth.value2 = '';
-      ['login', 'login2'].forEach(function (k) {
-        if (copy.auth[k]) {
-          if (copy.auth[k].basic) copy.auth[k].basic.secret = '';
-          if (/secret|password/i.test(copy.auth[k].body || '')) copy.auth[k].body = '';
-        }
-      });
+      delete copy.auth.value2;
+      delete copy.auth.login2;
+      if (copy.auth.login) {
+        if (copy.auth.login.basic) copy.auth.login.basic.secret = '';
+        if (/secret|password/i.test(copy.auth.login.body || '')) copy.auth.login.body = '';
+      }
       copy.requests = copy.requests.map(function (r) { return { id: r.id, on: r.on, weight: r.weight, custom: r.custom, url: r.url, method: r.method }; });
       localStorage.setItem(storeKey(doc), JSON.stringify(copy));
     } catch (e) { /* storage full or disabled — the wizard still works */ }
@@ -197,17 +196,14 @@
         header: authInfo.header,
         prefix: authInfo.prefix,
         value: '',
-        value2: '',
         refresh: 'once',
         ttlMinutes: 30,
         csv: { file: 'credentials.csv', variable: 'apiKey' },
-        login: J.read.loginDefaults(doc, loginOp ? { oauth: null } : authInfo, loginOp),
-        login2: null
+        login: J.read.loginDefaults(doc, loginOp ? { oauth: null } : authInfo, loginOp)
       },
       checks: { allow3xx: false, extraCodes: '', maxMs: 0, connectMs: 10000, timeoutMs: 30000, rateHeader: '' },
       cookies: false
     };
-    cfg.auth.login2 = JSON.parse(JSON.stringify(cfg.auth.login));
 
     if (saved) {
       // What was answered last time, on top of what the document says now.
@@ -229,7 +225,6 @@
         ['kind', 'header', 'prefix', 'refresh', 'ttlMinutes'].forEach(function (k) { if (sa[k] !== undefined) cfg.auth[k] = sa[k]; });
         if (sa.csv) cfg.auth.csv = Object.assign(cfg.auth.csv, sa.csv);
         if (sa.login) cfg.auth.login = Object.assign(cfg.auth.login, sa.login, { body: sa.login.body || cfg.auth.login.body });
-        if (sa.login2) cfg.auth.login2 = Object.assign(cfg.auth.login2, sa.login2, { body: sa.login2.body || cfg.auth.login2.body });
       }
       if (Array.isArray(saved.requests)) {
         var anyOn = false;
@@ -549,6 +544,10 @@
         body.appendChild(elem('div', 'sdui-wz-warn', 'No usable policy yet — go back to Limiter and paste a Quota or SpikeArrest policy.'));
       }
       est.warnings.forEach(function (w) { body.appendChild(elem('div', 'sdui-wz-warn', w)); });
+      if (limits.quota && limits.identifier.kind === 'credential') {
+        body.appendChild(elem('p', 'sdui-wz-hint', 'The counter is per ' + limits.identifier.label.replace(/^the /, '') +
+          ' and the plan carries a single token, so "another caller is not affected" is not offered: proving that would take a second credential.'));
+      }
 
       var list = elem('div', 'sdui-wz-cards');
       body.appendChild(list);
@@ -627,10 +626,7 @@
         nf('Grace after the reset (s)', 'graceSeconds', 0, 'Extra seconds past the computed boundary — clock skew and counter sync.');
       } else if (k === 'quota-isolation') {
         nf('Requests as the other caller', 'requests', 1);
-        var ik = limits.identifier.kind;
-        g.appendChild(elem('p', 'sdui-wz-hint', ik === 'credential'
-          ? 'The counter is per app, so the other caller is a second app: fill its client id / secret under Credential → "The other caller". No second app at hand? Untick this scenario.'
-          : 'The other caller sends the second ' + (limits.identifier.name || 'identifier') + ' value from the Limiter step.'));
+        g.appendChild(elem('p', 'sdui-wz-hint', 'The other caller sends the same token with the second ' + (limits.identifier.name || 'identifier') + ' value from the Limiter step.'));
       } else if (k === 'quota-under' || k === 'quota-over') {
         nf('Share of the quota', 'factor', 0.01, k === 'quota-under' ? '0.9 = 90% of the allowed rate.' : '1.5 = 150% of the allowed rate.', 0.05);
         nf('Windows to hold it for', 'windows', 1, 'A quota is only proven across a whole window.', 1);
@@ -758,13 +754,11 @@
 
     /* ----- 5. credential ----- */
     function renderAuth() {
-      var est = J.estimate(cfg);
-      var needsOther = est.scenarios.some(function (s) { return s.kind === 'quota-isolation'; }) && est.limits.identifier.kind === 'credential';
       var s = section(body, 'What credential do the requests carry?',
-        'Limits are counted per credential, so this decides whose limit is measured.' +
+        'One credential for the whole plan: every scenario sends the same token or key, so this decides whose limit is measured.' +
         (authInfo.oauth ? ' The document declares OAuth 2 with a token endpoint, so fetching a token is pre-filled.' : ''));
       choiceCards(s, 'sdui-wz-auth', [
-        { value: 'login', title: 'Fetch a token once', desc: 'A setUp thread group calls the token endpoint before any load; every request reuses the token.' },
+        { value: 'login', title: 'Fetch a token once', desc: 'A setUp thread group calls the token endpoint before any load; every request in every scenario reuses that one token.' },
         { value: 'static', title: 'I have one', desc: 'Paste a token or API key; -Jtoken overrides it at run time.' },
         { value: 'csv', title: 'Many keys from a CSV', desc: 'Each iteration takes the next line — spreads a per-key limit over many keys.' },
         { value: 'none', title: 'None', desc: 'Open endpoint, or the limiter counts by IP.' }
@@ -778,7 +772,6 @@
       if (cfg.auth.kind === 'static') {
         var gs = grid(s);
         bind(field(gs, authInfo.apiKeyIn === 'query' ? 'API key (sent as ?' + authInfo.queryName + '=)' : 'Token / key', textBox(cfg.auth.value), 'Override at run time with -Jtoken=…'), function (v) { cfg.auth.value = v; });
-        if (needsOther) bind(field(gs, 'A second key — the other caller', textBox(cfg.auth.value2), '-Jtoken2 overrides it.'), function (v) { cfg.auth.value2 = v; renderNav(); renderFoot(); });
       }
       if (cfg.auth.kind === 'csv') {
         var gc = grid(s);
@@ -789,7 +782,7 @@
         });
       }
       if (cfg.auth.kind === 'login') {
-        renderLogin(s, cfg.auth.login, false);
+        renderLogin(s, cfg.auth.login);
         var gt = grid(s);
         bind(field(gt, 'Token lifetime (minutes)', numberBox(cfg.auth.ttlMinutes, 1), 'Used only when the response has no expires_in.'), function (v) { cfg.auth.ttlMinutes = num(v, 1); });
         var rsel = field(gt, 'When is it fetched?', dropdown([
@@ -798,10 +791,6 @@
           { value: 'iteration', label: 'Before every iteration' }
         ], cfg.auth.refresh), refreshHint(cfg.auth.refresh));
         bind(rsel, function (v) { cfg.auth.refresh = v; render(); }, 'change');
-        if (needsOther) {
-          var s2 = section(body, 'The other caller', 'The "another caller is not affected" scenario needs a token for a second app. Same endpoint, different credentials.');
-          renderLogin(s2, cfg.auth.login2, true);
-        }
       }
 
       /* pass / fail rules */
@@ -823,41 +812,34 @@
       return 'The right choice for a rate-limit test: one token, fetched before the load, so the token endpoint never gets in the way.';
     }
 
-    function renderLogin(parent, lg, second) {
+    function renderLogin(parent, lg) {
       var sources = [];
       if (authInfo.oauth) sources.push({ value: 'oauth', label: 'OAuth 2 ' + authInfo.oauth.flow + ' — ' + authInfo.oauth.tokenUrl });
       ops.forEach(function (o) { sources.push({ value: o.id, label: o.method.toUpperCase() + ' ' + o.path + (o.summary ? '  —  ' + o.summary : '') }); });
       sources.push({ value: 'custom', label: 'Another URL — not in this document' });
-      if (!second) {
-        var lsel = field(parent, 'Token endpoint', dropdown(sources, lg.source));
-        bind(lsel, function (v) {
-          var entry = null;
-          ops.forEach(function (o) { if (o.id === v) entry = o; });
-          var fresh = J.read.loginDefaults(doc, v === 'oauth' ? authInfo : { oauth: null }, entry);
-          fresh.source = v;
-          cfg.auth.login = fresh;
-          cfg.auth.login2 = JSON.parse(JSON.stringify(fresh));
-          render();
-        }, 'change');
-      }
+      var lsel = field(parent, 'Token endpoint', dropdown(sources, lg.source));
+      bind(lsel, function (v) {
+        var entry = null;
+        ops.forEach(function (o) { if (o.id === v) entry = o; });
+        var fresh = J.read.loginDefaults(doc, v === 'oauth' ? authInfo : { oauth: null }, entry);
+        fresh.source = v;
+        cfg.auth.login = fresh;
+        render();
+      }, 'change');
       var gl = grid(parent);
-      if (!second) {
-        bind(field(gl, 'URL or path', textBox(lg.url), 'A path uses the host above; a full https:// URL calls its own host.'), function (v) { lg.url = v.trim(); cfg.auth.login2.url = lg.url; renderNav(); renderFoot(); });
-        bind(field(gl, 'Method', dropdown(['POST', 'GET', 'PUT'].map(function (m) { return { value: m, label: m }; }), lg.method)), function (v) { lg.method = v; cfg.auth.login2.method = v; }, 'change');
-        var lc = field(gl, 'Content type', dropdown([
-          { value: 'application/x-www-form-urlencoded', label: 'application/x-www-form-urlencoded' },
-          { value: 'application/json', label: 'application/json' }
-        ], lg.contentType));
-        bind(lc, function (v) {
-          lg.contentType = v;
-          lg.body = /x-www-form-urlencoded/.test(v) ? J.asForm(lg.body) : J.asJson(lg.body);
-          cfg.auth.login2.contentType = v;
-          cfg.auth.login2.body = /x-www-form-urlencoded/.test(v) ? J.asForm(cfg.auth.login2.body) : J.asJson(cfg.auth.login2.body);
-          render();
-        }, 'change');
-        bind(field(gl, 'Token field in the response', textBox(lg.jsonPath), 'JSON path — $.access_token, $.data.token …'), function (v) { lg.jsonPath = v.trim(); cfg.auth.login2.jsonPath = lg.jsonPath; });
-        bind(field(gl, 'Lifetime field (optional)', textBox(lg.expiresPath), '$.expires_in — seconds; read when present.'), function (v) { lg.expiresPath = v.trim(); cfg.auth.login2.expiresPath = lg.expiresPath; });
-      }
+      bind(field(gl, 'URL or path', textBox(lg.url), 'A path uses the host above; a full https:// URL calls its own host.'), function (v) { lg.url = v.trim(); renderNav(); renderFoot(); });
+      bind(field(gl, 'Method', dropdown(['POST', 'GET', 'PUT'].map(function (m) { return { value: m, label: m }; }), lg.method)), function (v) { lg.method = v; }, 'change');
+      var lc = field(gl, 'Content type', dropdown([
+        { value: 'application/x-www-form-urlencoded', label: 'application/x-www-form-urlencoded' },
+        { value: 'application/json', label: 'application/json' }
+      ], lg.contentType));
+      bind(lc, function (v) {
+        lg.contentType = v;
+        lg.body = /x-www-form-urlencoded/.test(v) ? J.asForm(lg.body) : J.asJson(lg.body);
+        render();
+      }, 'change');
+      bind(field(gl, 'Token field in the response', textBox(lg.jsonPath), 'JSON path — $.access_token, $.data.token …'), function (v) { lg.jsonPath = v.trim(); });
+      bind(field(gl, 'Lifetime field (optional)', textBox(lg.expiresPath), '$.expires_in — seconds; read when present.'), function (v) { lg.expiresPath = v.trim(); });
       var basicWrap = elem('div');
       parent.appendChild(basicWrap);
       var basicNote = elem('div', 'sdui-wz-warn');
@@ -900,7 +882,7 @@
         rawWrap.hidden = !rawWrap.hidden;
         rawToggle.textContent = rawWrap.hidden ? 'edit the raw body' : 'hide the raw body';
       });
-      var rawBox = field(rawWrap, second ? 'Body sent to the token endpoint (other app)' : 'Body sent to the token endpoint', textArea(lg.body, 3),
+      var rawBox = field(rawWrap, 'Body sent to the token endpoint', textArea(lg.body, 3),
         /x-www-form-urlencoded/.test(lg.contentType) ? 'Form fields as a=b&c=d.' : 'Sent exactly as written.');
       bind(rawBox, function (v) { lg.body = v; drawFields(); renderNav(); renderFoot(); });
 
@@ -912,9 +894,9 @@
           rawWrap.hidden = false;
           return;
         }
-        var head = elem('p', 'sdui-wz-hint', second
-          ? 'The other app\'s credentials — same endpoint, a different client.'
-          : (fields.length ? 'What the token endpoint receives. Put the real client credentials here' + (lg.basic.on ? ' (or in the Basic header above)' : '') + '.' : 'No body fields yet — add the ones the endpoint expects, e.g. grant_type, client_id, client_secret.'));
+        var head = elem('p', 'sdui-wz-hint', fields.length
+          ? 'What the token endpoint receives. Put the real client credentials here' + (lg.basic.on ? ' (or in the Basic header above)' : '') + '.'
+          : 'No body fields yet — add the ones the endpoint expects, e.g. grant_type, client_id, client_secret.');
         fieldsWrap.appendChild(head);
         var g = grid(fieldsWrap);
         fields.forEach(function (f, i) {
@@ -1028,7 +1010,7 @@
         tr0.appendChild(elem('td', null, 'Fetch the token'));
         tr0.appendChild(elem('td', null, cfg.auth.login.method + ' ' + cfg.auth.login.url + ' → ' + cfg.auth.login.jsonPath));
         tr0.appendChild(elem('td', null, '~1 s'));
-        tr0.appendChild(elem('td', null, est.scenarios.some(function (x) { return x.kind === 'quota-isolation'; }) && est.limits.identifier.kind === 'credential' ? '2' : '1'));
+        tr0.appendChild(elem('td', null, '1'));
         tb.appendChild(tr0);
       }
       est.scenarios.forEach(function (p) {
@@ -1059,8 +1041,8 @@
       if (a.kind === 'none') return 'No credential is sent.';
       if (a.kind === 'csv') return 'Credentials come one per iteration from ' + a.csv.file + '.';
       if (a.kind === 'static') return 'Every request carries the ' + a.header + ' header you pasted.';
-      return 'A token is fetched ' + (a.refresh === 'once' ? 'once, before the load,' : a.refresh === 'expiry' ? 'once and again on expiry,' : 'before every iteration,') +
-        ' from ' + a.login.method + ' ' + a.login.url + ' and sent as ' + a.header + '.';
+      return 'One token is fetched ' + (a.refresh === 'once' ? 'once, before the load,' : a.refresh === 'expiry' ? 'once and again on expiry,' : 'before every iteration,') +
+        ' from ' + a.login.method + ' ' + a.login.url + ' and sent as ' + a.header + ' by every scenario.';
     }
 
     function planTree(est) {
@@ -1083,7 +1065,7 @@
           if (g.wait) lines.push('│    ├─ Start-up delay until a fresh window (≤ ' + J.fmtSeconds(g.wait.seconds) + ')');
           lines.push('│    ├─ ' + (g.mode === 'burst' ? 'Synchronizing timer' : g.mode === 'paced' ? 'Constant throughput timer' : 'no timer'));
           lines.push('│    ├─ Response assertion (pass or limited) · counter post-processor');
-          if (cfg.auth.kind === 'login' && cfg.auth.refresh !== 'once' && g.identity !== 'other') lines.push('│    ├─ ' + (cfg.auth.refresh === 'expiry' ? 'If expired → TOKEN (one thread at a time)' : 'TOKEN every iteration'));
+          if (cfg.auth.kind === 'login' && cfg.auth.refresh !== 'once') lines.push('│    ├─ ' + (cfg.auth.refresh === 'expiry' ? 'If expired → TOKEN (one thread at a time)' : 'TOKEN every iteration'));
           active.forEach(function (r, i) {
             lines.push('│    ' + (i === active.length - 1 ? '└─ ' : '├─ ') + (cfg.mix === 'weighted' && active.length > 1 ? r.weight + '× ' : '') + '[' + (g.step ? p.key + '.' + g.step : p.key) + '] ' + r.label);
           });
