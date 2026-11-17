@@ -152,8 +152,103 @@
     };
   }
 
-  function toPostman(doc) {
+  function responseExample(doc, op) {
+    var responses = op.responses || {};
+    var codes = Object.keys(responses).sort(function (a, b) {
+      return (String(a).charAt(0) === '2' ? -1 : 0) - (String(b).charAt(0) === '2' ? -1 : 0);
+    });
+    for (var i = 0; i < codes.length; i++) {
+      var response = deref(doc, responses[codes[i]]) || {};
+      var content = response.content || {};
+      var mimes = Object.keys(content).filter(function (m) { return /json/i.test(m); });
+      for (var j = 0; j < mimes.length; j++) {
+        var media = content[mimes[j]] || {};
+        if (media.example !== undefined) return media.example;
+        if (media.examples) {
+          var names = Object.keys(media.examples);
+          if (names.length) return (deref(doc, media.examples[names[0]]) || {}).value;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function responsePaths(example) {
+    var paths = [];
+    function visit(value, path, depth) {
+      if (depth > 5 || paths.length >= 120) return;
+      if (value === null || typeof value !== 'object') {
+        if (path && !paths.includes(path)) paths.push(path);
+        return;
+      }
+      if (Array.isArray(value)) {
+        if (value.length) visit(value[0], path + '[0]', depth + 1);
+      } else {
+        Object.keys(value).forEach(function (key) {
+          if (/^[a-zA-Z_$][\\w$]*$/.test(key)) visit(value[key], path ? path + '.' + key : key, depth + 1);
+          else visit(value[key], path + '[' + JSON.stringify(key) + ']', depth + 1);
+        });
+      }
+    }
+    if (example !== undefined) visit(example, '', 0);
+    return paths;
+  }
+
+  function operations(doc) {
+    var result = [];
+    Object.keys(doc.paths || {}).forEach(function (path) {
+      var entry = doc.paths[path] || {};
+      METHODS.forEach(function (method) {
+        if (!isObj(entry[method])) return;
+        var op = entry[method];
+        result.push({
+          id: method.toUpperCase() + ' ' + path,
+          label: method.toUpperCase() + ' ' + path + (op.summary ? ' — ' + op.summary : ''),
+          paths: responsePaths(responseExample(doc, op))
+        });
+      });
+    });
+    return result;
+  }
+
+  function parseResponsePath(path) {
+    // Accept dotted keys and numeric/quoted brackets, not executable expressions.
+    var parts = [];
+    var input = String(path || '').trim().replace(/^\\$\\.?/, '');
+    var token = /(?:^|\\.)([a-zA-Z_$][\\w$]*)|\\[(\\d+|"(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')\\]/g;
+    var match, end = 0;
+    while ((match = token.exec(input))) {
+      if (match.index !== end) throw new Error('Invalid response field path');
+      parts.push(match[1] !== undefined ? match[1]
+        : /^\\d+$/.test(match[2]) ? Number(match[2])
+          : match[2][0] === '"' ? JSON.parse(match[2]) : match[2].slice(1, -1));
+      end = token.lastIndex;
+    }
+    if (!parts.length || end !== input.length) throw new Error('Enter a response field like data.accessToken');
+    return parts;
+  }
+
+  function tokenCaptureScript(variableName, path, scope) {
+    var parts = parseResponsePath(path);
+    var accessor = parts.map(function (part) { return '[' + JSON.stringify(part) + ']'; }).join('');
+    var target = scope === 'external' ? 'pm.environment' : 'pm.collectionVariables';
+    return [
+      'if (pm.response.code >= 200 && pm.response.code < 300) {',
+      '  try {',
+      '    var body = pm.response.json();',
+      '    var value = body' + accessor + ';',
+      '    if (value !== undefined && value !== null && value !== "") {',
+      '      ' + target + '.set(' + JSON.stringify(variableName) + ', String(value));',
+      '    }',
+      '  } catch (e) { console.warn("Token capture skipped:", e.message); }',
+      '}'
+    ].join('\\n');
+  }
+
+  function toPostman(doc, options) {
     if (!isObj(doc) || !isObj(doc.paths)) throw new Error('the document has no paths');
+    options = options || {};
+    var scope = options.environmentSource === 'external' ? 'external' : 'collection';
     var server = Array.isArray(doc.servers) && doc.servers[0] && doc.servers[0].url
       ? doc.servers[0].url.replace(/\/$/, '') : 'http://localhost';
     var folders = {}; // tag -> items
@@ -187,11 +282,191 @@
         schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
       },
       item: items,
-      variable: [{ key: 'baseUrl', value: server, type: 'string' }]
+      variable: scope === 'collection' ? [{ key: 'baseUrl', value: server, type: 'string' }] : []
     };
     var auth = postmanAuth(doc);
     if (auth) collection.auth = auth;
+    if (options.captureToken) {
+      var found = false;
+      function attach(items) {
+        items.forEach(function (item) {
+          if (item.item) return attach(item.item);
+          var raw = item.request && item.request.url && item.request.url.raw || '';
+          var path = raw.split('?')[0].replace(/^\\{\\{baseUrl\\}\\}/, '')
+            .replace(/:([^/]+)/g, '{$1}');
+          var id = item.request.method + ' ' + (path || '/');
+          if (id !== options.captureRequest || found) return;
+          item.event = [{
+            listen: 'test',
+            script: {
+              type: 'text/javascript',
+              exec: tokenCaptureScript(options.variableName || 'bearerToken', options.responsePath, scope).split('\\n')
+            }
+          }];
+          found = true;
+        });
+      }
+      attach(collection.item);
+      if (!found) throw new Error('The selected token API could not be found');
+    }
     return collection;
+  }
+
+  function toPostmanEnvironment(doc, options) {
+    options = options || {};
+    var server = Array.isArray(doc.servers) && doc.servers[0] && doc.servers[0].url
+      ? doc.servers[0].url.replace(/\\/$/, '') : 'http://localhost';
+    var values = [{ key: 'baseUrl', value: server, type: 'default', enabled: true }];
+    var auth = postmanAuth(doc);
+    if (auth && auth.type === 'bearer') values.push({ key: 'bearerToken', value: '', type: 'secret', enabled: true });
+    if (auth && auth.type === 'apikey') values.push({ key: 'apiKey', value: '', type: 'secret', enabled: true });
+    if (options.captureToken && !values.some(function (v) { return v.key === options.variableName; })) {
+      values.push({ key: options.variableName, value: '', type: 'secret', enabled: true });
+    }
+    return {
+      name: ((doc.info && doc.info.title) || 'API') + ' Environment',
+      values: values,
+      _postman_variable_scope: 'environment',
+      _postman_exported_using: 'Swagger Dark UI'
+    };
+  }
+
+  function openPostmanWizard(doc, status) {
+    var operationsList = operations(doc);
+    var overlay = document.createElement('div');
+    overlay.className = 'sdui-postman-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+    var panel = document.createElement('form');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', 'Postman export settings');
+    panel.style.cssText = 'width:min(550px,100%);max-height:90vh;overflow:auto;background:#161b25;color:#e5e7eb;border:1px solid #424a59;border-radius:12px;padding:22px;box-shadow:0 20px 80px #0008;font:14px system-ui';
+    function element(tag, text, parent) {
+      var e = document.createElement(tag);
+      if (text !== undefined) e.textContent = text;
+      (parent || panel).appendChild(e);
+      return e;
+    }
+    function field(title, control) {
+      var label = element('label', title);
+      label.style.cssText = 'display:block;margin:14px 0 6px;font-weight:600';
+      if (control) label.htmlFor = control.id;
+    }
+    function select(id, items) {
+      var el = element('select');
+      el.id = id;
+      el.style.cssText = 'width:100%;padding:10px;border-radius:7px;background:#252d3c;color:inherit;border:1px solid #535c6e';
+      items.forEach(function (entry) {
+        var option = document.createElement('option');
+        option.value = entry.value;
+        option.textContent = entry.label;
+        el.appendChild(option);
+      });
+      return el;
+    }
+    function input(id, value, list) {
+      var el = element('input');
+      el.id = id;
+      el.value = value;
+      el.type = 'text';
+      if (list) el.setAttribute('list', list);
+      el.style.cssText = 'width:100%;box-sizing:border-box;padding:10px;border-radius:7px;background:#252d3c;color:inherit;border:1px solid #535c6e';
+      return el;
+    }
+    var title = element('h2', 'Postman export settings');
+    title.style.margin = '0 0 8px';
+    element('p', 'Choose the variable source and optionally capture a token from an API response.');
+    field('Variable source');
+    var source = select('sdui-postman-source', [
+      { value: 'collection', label: 'Collection variables (embedded)' },
+      { value: 'external', label: 'External Postman environment (.json)' }
+    ]);
+    var note = element('p');
+    note.style.cssText = 'font-size:12px;opacity:.8;margin-top:7px';
+    var checkLabel = element('label');
+    checkLabel.style.cssText = 'display:flex;align-items:center;gap:10px;margin-top:18px;font-weight:600';
+    var enabled = document.createElement('input');
+    enabled.type = 'checkbox';
+    checkLabel.appendChild(enabled);
+    checkLabel.appendChild(document.createTextNode('Save token / response field to variables'));
+    var capture = element('div');
+    field('API whose response provides the value');
+    var request = select('sdui-postman-request', operationsList.map(function (op) {
+      return { value: op.id, label: op.label };
+    }));
+    field('Response field (JSON path)');
+    var path = input('sdui-postman-path', '', 'sdui-postman-response-paths');
+    var datalist = element('datalist');
+    datalist.id = 'sdui-postman-response-paths';
+    field('Variable name');
+    var variable = input('sdui-postman-variable', 'bearerToken');
+    var help = element('p', 'Pick a field suggested from OpenAPI response examples or type a path, e.g. data.accessToken.');
+    help.style.cssText = 'font-size:12px;opacity:.8';
+    function updatePaths() {
+      var selected = operationsList.filter(function (op) { return op.id === request.value; })[0];
+      var paths = selected ? selected.paths : [];
+      datalist.replaceChildren();
+      paths.forEach(function (p) {
+        var item = document.createElement('option');
+        item.value = p;
+        datalist.appendChild(item);
+      });
+      path.value = paths.filter(function (p) { return /(?:^|\\.)(?:access_token|accessToken|token|jwt)$/i.test(p); })[0]
+        || paths[0] || '';
+    }
+    function update() {
+      capture.hidden = !enabled.checked;
+      note.textContent = source.value === 'external'
+        ? 'Downloads a collection and a separate environment file. Import both and select the environment in Postman.'
+        : 'Variables are stored in the collection; no separate environment is required.';
+    }
+    source.addEventListener('change', update);
+    enabled.addEventListener('change', update);
+    request.addEventListener('change', updatePaths);
+    updatePaths();
+    update();
+    var actions = element('div');
+    actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;margin-top:20px';
+    var cancel = element('button', 'Cancel', actions);
+    cancel.type = 'button';
+    var submit = element('button', 'Export', actions);
+    submit.type = 'submit';
+    [cancel, submit].forEach(function (b) { b.style.cssText = 'padding:10px 18px;border-radius:7px;cursor:pointer'; });
+    function close() { document.removeEventListener('keydown', onKey); overlay.remove(); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    cancel.addEventListener('click', close);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    panel.addEventListener('submit', function (event) {
+      event.preventDefault();
+      try {
+        var options = {
+          environmentSource: source.value,
+          captureToken: enabled.checked,
+          captureRequest: request.value,
+          responsePath: path.value,
+          variableName: variable.value.trim()
+        };
+        if (options.captureToken && (!options.variableName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(options.variableName))) {
+          throw new Error('Enter a valid variable name (letters, digits, underscore)');
+        }
+        var collection = toPostman(doc, options);
+        download(slug(doc) + '.postman_collection.json', 'application/json', JSON.stringify(collection, null, 2));
+        if (source.value === 'external') {
+          download(slug(doc) + '.postman_environment.json', 'application/json',
+            JSON.stringify(toPostmanEnvironment(doc, options), null, 2));
+        }
+        status('ok', source.value === 'external'
+          ? 'Postman collection and environment downloaded — import both and select the environment'
+          : 'Postman collection downloaded with embedded variables');
+        close();
+      } catch (error) {
+        status('err', 'Postman export failed: ' + error.message);
+      }
+    });
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    source.focus();
   }
 
   /* ----- standalone HTML documentation ----- */
@@ -264,10 +539,8 @@
         run: function () {
           var doc = currentDoc();
           if (doc.swagger) throw new Error('convert the document to OpenAPI 3 first');
-          var collection = toPostman(doc);
-          download(slug(doc) + '.postman_collection.json', 'application/json',
-            JSON.stringify(collection, null, 2));
-          return 'Postman collection downloaded — import it via File → Import in Postman';
+          openPostmanWizard(doc, opts.setStatus);
+          return '';
         }
       },
       {
@@ -337,6 +610,8 @@
   window.SduiExport = {
     init: init,
     toPostman: toPostman,
+    toPostmanEnvironment: toPostmanEnvironment,
+    parseResponsePath: parseResponsePath,
     standaloneHtml: standaloneHtml,
     util: { isObj: isObj, deref: deref, exampleFor: exampleFor, slug: slug, download: download }
   };
