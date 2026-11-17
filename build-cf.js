@@ -244,6 +244,7 @@ const NAV_LINKS =
   '<a href="/guide/">Guide</a>' +
   '<a href="/faq/">FAQ</a>' +
   '<a href="https://github.com/dikeckaan/swagger-dark-ui" rel="noopener">GitHub</a>' +
+  '<a href="/standalone.html" download="oasforge-standalone.html" title="Download the complete offline app as one HTML file">Download standalone</a>' +
   '<a class="cta" href="/editor/">Open the editor</a>' +
   '</nav>';
 
