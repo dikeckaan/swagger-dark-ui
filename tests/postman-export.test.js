@@ -54,3 +54,17 @@ test('invalid paths and absent operations are rejected', () => {
   assert.throws(() => api.parseResponsePath('data;alert(1)'));
   assert.throws(() => api.toPostman(doc, { ...capture, captureRequest: 'POST /missing' }));
 });
+
+test('no-environment export has direct URLs and no variables', () => {
+  const collection = api.toPostman(doc, { environmentSource: 'none' });
+  assert.equal(collection.variable.length, 0);
+  assert.equal(collection.item[0].request.url.raw, 'https://example.com/api/auth/login');
+  assert.equal(collection.item[1].request.url.raw, 'https://example.com/api/users/:id');
+  assert.equal(collection.auth.bearer[0].value, '');
+  assert.equal(collection.item[0].event, undefined);
+});
+
+test('no-environment mode rejects token capture', () => {
+  assert.throws(() => api.toPostman(doc, { ...capture, environmentSource: 'none' }),
+    /requires collection variables or an external environment/);
+});
