@@ -267,6 +267,7 @@
         var op = item[method];
         if (!isObj(op)) return;
         var reqItem = postmanRequest(doc, pathName, method, op, shared, scope === 'none' ? server : null);
+        if (scope === 'none') reqItem.request.url = reqItem.request.url.raw;
         var tag = Array.isArray(op.tags) && op.tags.length ? String(op.tags[0]) : null;
         if (tag) {
           (folders[tag] = folders[tag] || []).push(reqItem);
