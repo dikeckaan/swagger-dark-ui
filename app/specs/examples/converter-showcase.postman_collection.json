@@ -1,0 +1,675 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-0000-4000-8000-showcase0001",
+    "name": "Converter Showcase",
+    "description": "Demo collection that exercises EVERY feature of the Swagger Dark UI Postman→OpenAPI converter:\n\n- folders → tags\n- {{baseUrl}} variable → server\n- collection-level apikey auth + per-request bearer/basic/oauth2 overrides\n- raw Authorization header → bearer scheme\n- Accept/Content-Type headers dropped (implied by content)\n- custom headers kept as parameters\n- path variables ({{var}} and :var), query params with descriptions\n- bodies: raw JSON, urlencoded, form-data with file upload, GraphQL, XML\n- saved responses: one per code → example; several per code → named Examples dropdown; per-media-type variants; meaningful response headers kept, transport noise dropped",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.showcase.example/v1"
+    },
+    {
+      "key": "token",
+      "value": "demo-token"
+    }
+  ],
+  "item": [
+    {
+      "name": "Orders",
+      "description": "Order management — this folder becomes the \"Orders\" tag.",
+      "item": [
+        {
+          "name": "List orders",
+          "request": {
+            "method": "GET",
+            "description": "Custom X-Request-Id header is kept as a parameter; the Accept header is dropped (implied by response content).",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "req-123",
+                "type": "text",
+                "description": "Correlation id echoed back by the server"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders?status=shipped&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "shipped",
+                  "description": "Filter by order status"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Page size (max 100)"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Success - two orders",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "X-Total-Count",
+                  "value": "2",
+                  "type": "text"
+                },
+                {
+                  "key": "X-RateLimit-Remaining",
+                  "value": "98",
+                  "type": "text"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 24 Aug 2026 12:00:00 GMT",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"items\": [\n    {\n      \"id\": \"ord_1\",\n      \"status\": \"shipped\",\n      \"total\": 149.9\n    },\n    {\n      \"id\": \"ord_2\",\n      \"status\": \"shipped\",\n      \"total\": 20\n    }\n  ],\n  \"total\": 2\n}"
+            },
+            {
+              "name": "Success - empty page",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "X-Total-Count",
+                  "value": "0",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"items\": [],\n  \"total\": 0\n}"
+            },
+            {
+              "name": "Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"error\": \"invalid_api_key\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "ord_1",
+                  "description": "Order identifier"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Order found",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"id\": \"ord_1\",\n  \"status\": \"shipped\",\n  \"total\": 149.9,\n  \"items\": [\n    {\n      \"sku\": \"W-1\",\n      \"qty\": 2\n    }\n  ]\n}"
+            },
+            {
+              "name": "Order not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"error\": \"order_not_found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create order",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"sku\": \"W-1\",\n      \"qty\": 2\n    }\n  ],\n  \"couponCode\": \"WELCOME10\",\n  \"notify\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Created",
+              "code": 201,
+              "status": "Created",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Location",
+                  "value": "/orders/ord_3",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"id\": \"ord_3\",\n  \"status\": \"pending\"\n}"
+            },
+            {
+              "name": "Validation failed",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"error\": \"validation_failed\",\n  \"field\": \"items\",\n  \"message\": \"at least one item required\"\n}"
+            },
+            {
+              "name": "Insufficient stock",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"error\": \"insufficient_stock\",\n  \"sku\": \"W-1\",\n  \"available\": 1\n}"
+            },
+            {
+              "name": "Rate limited",
+              "code": 429,
+              "status": "Too Many Requests",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "30",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"error\": \"slow_down\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Authentication flows — basic, urlencoded token exchange, OAuth2 PKCE.",
+      "item": [
+        {
+          "name": "Get token",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "client",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "secret",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "description": "OAuth2 grant type"
+                },
+                {
+                  "key": "scope",
+                  "value": "orders:read orders:write"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Token issued",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"access_token\": \"eyJ...\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600\n}"
+            },
+            {
+              "name": "Bad credentials",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"error\": \"invalid_client\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Userinfo (OAuth2 PKCE)",
+          "request": {
+            "auth": {
+              "type": "oauth2",
+              "oauth2": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code_with_pkce",
+                  "type": "string"
+                },
+                {
+                  "key": "authUrl",
+                  "value": "https://auth.showcase.example/oauth/authorize",
+                  "type": "string"
+                },
+                {
+                  "key": "accessTokenUrl",
+                  "value": "https://auth.showcase.example/oauth/token",
+                  "type": "string"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid profile email",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/userinfo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "userinfo"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Profile",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"sub\": \"user_1\",\n  \"name\": \"Minnie Mouse\",\n  \"email\": \"minnie@mouse.com\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "description": "Uploads and downloads — multipart bodies and non-JSON responses.",
+      "item": [
+        {
+          "name": "Upload attachment",
+          "request": {
+            "method": "POST",
+            "description": "The raw Authorization header below is converted into a bearer security scheme, not a parameter.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/tmp/report.pdf"
+                },
+                {
+                  "key": "caption",
+                  "value": "Quarterly report",
+                  "type": "text",
+                  "description": "Shown next to the attachment"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attachments"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Uploaded",
+              "code": 201,
+              "status": "Created",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"id\": \"att_1\",\n  \"size\": 48211\n}"
+            },
+            {
+              "name": "Too large",
+              "code": 413,
+              "status": "Payload Too Large",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"error\": \"max_size_exceeded\",\n  \"maxBytes\": 10485760\n}"
+            }
+          ]
+        },
+        {
+          "name": "Download report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/latest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "latest"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "CSV variant",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "text/csv",
+                  "type": "text"
+                }
+              ],
+              "body": "order_id,total\nord_1,149.9\nord_2,20"
+            },
+            {
+              "name": "JSON variant",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "[\n  {\n    \"order_id\": \"ord_1\",\n    \"total\": 149.9\n  }\n]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "description": "GraphQL and legacy XML endpoints.",
+      "item": [
+        {
+          "name": "GraphQL search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Search($q: String!) { orders(filter: $q) { id total } }",
+                "variables": "{ \"q\": \"shipped\" }"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Hits",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"orders\": [\n      {\n        \"id\": \"ord_1\",\n        \"total\": 149.9\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Legacy XML echo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/xml",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<echo><message>hello</message></echo>",
+              "options": {
+                "raw": {
+                  "language": "xml"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/legacy/echo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "legacy",
+                "echo"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Echoed",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/xml",
+                  "type": "text"
+                }
+              ],
+              "body": "<echo><message>hello</message></echo>"
+            },
+            {
+              "name": "Echoed",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/xml",
+                  "type": "text"
+                }
+              ],
+              "body": "<echo><message>hello again — duplicate name shows the (2) suffix</message></echo>"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

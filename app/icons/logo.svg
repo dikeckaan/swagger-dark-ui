@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Swagger Dark UI logo: an OpenAPI document — curly braces wrapping
+       API routes, each ending in a method-colored endpoint. -->
+  <g fill="none" stroke="#58a6ff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.2 2.6 C5.9 2.6 6.6 5.4 6.3 7.6 C6.1 9.3 5.6 10.6 3.6 12 C5.6 13.4 6.1 14.7 6.3 16.4 C6.6 18.6 5.9 21.4 8.2 21.4"/>
+    <path d="M15.8 2.6 C18.1 2.6 17.4 5.4 17.7 7.6 C17.9 9.3 18.4 10.6 20.4 12 C18.4 13.4 17.9 14.7 17.7 16.4 C17.4 18.6 18.1 21.4 15.8 21.4"/>
+  </g>
+  <g stroke-width="1.7" stroke-linecap="round">
+    <line x1="9.2" y1="8" x2="12.1" y2="8" stroke="#49cc90"/>
+    <line x1="9.2" y1="12" x2="13.3" y2="12" stroke="#61affe"/>
+    <line x1="9.2" y1="16" x2="11.2" y2="16" stroke="#fca130"/>
+  </g>
+  <circle cx="13.7" cy="8" r="1.35" fill="#49cc90"/>
+  <circle cx="14.9" cy="12" r="1.35" fill="#61affe"/>
+  <circle cx="12.8" cy="16" r="1.35" fill="#fca130"/>
+</svg>

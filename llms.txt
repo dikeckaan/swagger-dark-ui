@@ -1,0 +1,30 @@
+# OASForge
+
+> Free OpenAPI editor with live Swagger UI preview, one-click validation fixes and an in-browser mock server. No signup — nothing leaves your browser.
+
+OASForge (formerly Swagger Dark UI) is a free, source-available (ELv2) OpenAPI workbench by Kaan Dikeç. Everything runs client-side: editor with live Swagger UI preview, version-aware validation with quick fixes (Swagger 2.0 through OpenAPI 3.2), a stateful in-browser mock server, Postman import and converters.
+
+## Product
+
+- [Editor](https://oasforge.dev/app/): the OpenAPI workbench (My API split view at /app/?spec=custom)
+- [Offline single-file app](https://oasforge.dev/standalone.html): the whole tool in one downloadable HTML file
+- [User guide](https://oasforge.dev/guide/): complete reference manual
+- [FAQ](https://oasforge.dev/faq/): privacy, versions, offline use, licensing
+- [License](https://oasforge.dev/license/): Elastic License 2.0 summary and full text
+
+## Guides
+
+- [Free Online OpenAPI Editor with Dark Mode](https://oasforge.dev/openapi-editor/): Write OpenAPI 3.0, 3.1 and 3.2 specs in a free online editor with live Swagger UI preview, validation, autocomplete and quick fixes.
+- [OpenAPI Validator Online](https://oasforge.dev/openapi-validator/): Validate OpenAPI and Swagger specs in the browser: version-aware errors for 2.0, 3.0, 3.1 and 3.2, clickable issues that jump to the line, and one-click quick fixes.
+- [Swagger Editor Alternative](https://oasforge.dev/swagger-editor-alternative/): Looking for a Swagger Editor alternative? OASForge adds a dark theme, an in-browser mock server, Postman import, quick fixes and full offline support — free, with public source code.
+- [Convert Postman Collection to OpenAPI 3 Online](https://oasforge.dev/postman-to-openapi/): Drop a Postman Collection (v2 / v2.1) export into OASForge and get clean OpenAPI 3.0: auth schemes mapped, saved responses converted to named examples, noise headers removed.
+- [In-Browser OpenAPI Mock Server](https://oasforge.dev/openapi-mock-server/): OASForge ships a stateful mock server that runs inside the browser: POST creates records, GET lists them, responses derive from your schemas.
+- [Swagger UI Dark Theme](https://oasforge.dev/swagger-ui-dark-theme/): A polished dark theme for Swagger UI with four color palettes, built as CSS design tokens over Swagger UI 5.
+- [OpenAPI Example](https://oasforge.dev/openapi-example/): A minimal OpenAPI example you can copy, plus a full-feature OpenAPI 3.1 demo spec covering auth, callbacks, webhooks, oneOf/allOf and more — all editable live in the browser.
+- [OpenAPI 3.1 vs 3.0](https://oasforge.dev/openapi-3-1-vs-3-0/): The practical differences between OpenAPI 3.0 and 3.1: JSON Schema 2020-12 alignment, the end of nullable, numeric exclusiveMinimum, webhooks — and how a version-aware validator helps.
+- [OpenAPI 3.2](https://oasforge.dev/openapi-3-2/): OpenAPI 3.2 highlights — $self, the QUERY HTTP method, additionalOperations — and an online editor that validates 3.2 documents today.
+- [Convert Swagger 2.0 to OpenAPI 3 Online](https://oasforge.dev/swagger-2-to-openapi-3/): Paste a Swagger 2.0 document and convert it to OpenAPI 3 in one click: servers, requestBody, response content, components and $refs all rewritten — entirely in your browser.
+
+## Source
+
+- [GitHub](https://github.com/dikeckaan/swagger-dark-ui): source code, issues and releases
