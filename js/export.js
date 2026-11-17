@@ -185,7 +185,7 @@
         if (value.length) visit(value[0], path + '[0]', depth + 1);
       } else {
         Object.keys(value).forEach(function (key) {
-          if (/^[a-zA-Z_$][\\w$]*$/.test(key)) visit(value[key], path ? path + '.' + key : key, depth + 1);
+          if (/^[a-zA-Z_$][\w$]*$/.test(key)) visit(value[key], path ? path + '.' + key : key, depth + 1);
           else visit(value[key], path + '[' + JSON.stringify(key) + ']', depth + 1);
         });
       }
@@ -214,13 +214,13 @@
   function parseResponsePath(path) {
     // Accept dotted keys and numeric/quoted brackets, not executable expressions.
     var parts = [];
-    var input = String(path || '').trim().replace(/^\\$\\.?/, '');
-    var token = /(?:^|\\.)([a-zA-Z_$][\\w$]*)|\\[(\\d+|"(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')\\]/g;
+    var input = String(path || '').trim().replace(/^\$\.?/, '');
+    var token = /(?:^|\.)([a-zA-Z_$][\w$]*)|\[(\d+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\]/g;
     var match, end = 0;
     while ((match = token.exec(input))) {
       if (match.index !== end) throw new Error('Invalid response field path');
       parts.push(match[1] !== undefined ? match[1]
-        : /^\\d+$/.test(match[2]) ? Number(match[2])
+        : /^\d+$/.test(match[2]) ? Number(match[2])
           : match[2][0] === '"' ? JSON.parse(match[2]) : match[2].slice(1, -1));
       end = token.lastIndex;
     }
@@ -242,7 +242,7 @@
       '    }',
       '  } catch (e) { console.warn("Token capture skipped:", e.message); }',
       '}'
-    ].join('\\n');
+    ].join('\n');
   }
 
   function toPostman(doc, options) {
@@ -286,13 +286,20 @@
     };
     var auth = postmanAuth(doc);
     if (auth) collection.auth = auth;
+    if (scope === 'collection') {
+      if (auth && auth.type === 'bearer') collection.variable.push({ key: 'bearerToken', value: '', type: 'string' });
+      if (auth && auth.type === 'apikey') collection.variable.push({ key: 'apiKey', value: '', type: 'string' });
+      if (options.captureToken && !collection.variable.some(function (v) { return v.key === options.variableName; })) {
+        collection.variable.push({ key: options.variableName, value: '', type: 'string' });
+      }
+    }
     if (options.captureToken) {
       var found = false;
       function attach(items) {
         items.forEach(function (item) {
           if (item.item) return attach(item.item);
           var raw = item.request && item.request.url && item.request.url.raw || '';
-          var path = raw.split('?')[0].replace(/^\\{\\{baseUrl\\}\\}/, '')
+          var path = raw.split('?')[0].replace(/^\{\{baseUrl\}\}/, '')
             .replace(/:([^/]+)/g, '{$1}');
           var id = item.request.method + ' ' + (path || '/');
           if (id !== options.captureRequest || found) return;
@@ -300,7 +307,7 @@
             listen: 'test',
             script: {
               type: 'text/javascript',
-              exec: tokenCaptureScript(options.variableName || 'bearerToken', options.responsePath, scope).split('\\n')
+              exec: tokenCaptureScript(options.variableName || 'bearerToken', options.responsePath, scope).split('\n')
             }
           }];
           found = true;
@@ -315,7 +322,7 @@
   function toPostmanEnvironment(doc, options) {
     options = options || {};
     var server = Array.isArray(doc.servers) && doc.servers[0] && doc.servers[0].url
-      ? doc.servers[0].url.replace(/\\/$/, '') : 'http://localhost';
+      ? doc.servers[0].url.replace(/\/$/, '') : 'http://localhost';
     var values = [{ key: 'baseUrl', value: server, type: 'default', enabled: true }];
     var auth = postmanAuth(doc);
     if (auth && auth.type === 'bearer') values.push({ key: 'bearerToken', value: '', type: 'secret', enabled: true });
@@ -402,6 +409,7 @@
     var variable = input('sdui-postman-variable', 'bearerToken');
     var help = element('p', 'Pick a field suggested from OpenAPI response examples or type a path, e.g. data.accessToken.');
     help.style.cssText = 'font-size:12px;opacity:.8';
+    while (capture.nextSibling) capture.appendChild(capture.nextSibling);
     function updatePaths() {
       var selected = operationsList.filter(function (op) { return op.id === request.value; })[0];
       var paths = selected ? selected.paths : [];
@@ -411,7 +419,7 @@
         item.value = p;
         datalist.appendChild(item);
       });
-      path.value = paths.filter(function (p) { return /(?:^|\\.)(?:access_token|accessToken|token|jwt)$/i.test(p); })[0]
+      path.value = paths.filter(function (p) { return /(?:^|\.)(?:access_token|accessToken|token|jwt)$/i.test(p); })[0]
         || paths[0] || '';
     }
     function update() {
