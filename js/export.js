@@ -101,7 +101,7 @@
     };
   }
 
-  function postmanRequest(doc, pathName, method, op, sharedParams) {
+  function postmanRequest(doc, pathName, method, op, sharedParams, baseUrl) {
     var params = (sharedParams || []).concat(Array.isArray(op.parameters) ? op.parameters : [])
       .map(function (p) { return deref(doc, p); })
       .filter(isObj);
@@ -122,9 +122,10 @@
       return m ? ':' + m[1] : seg;
     });
 
+    var prefix = baseUrl || '{{baseUrl}}';
     var url = {
-      raw: '{{baseUrl}}/' + segments.join('/'),
-      host: ['{{baseUrl}}'],
+      raw: prefix + '/' + segments.join('/'),
+      host: [prefix],
       path: segments
     };
     if (query.length) {
@@ -248,7 +249,11 @@
   function toPostman(doc, options) {
     if (!isObj(doc) || !isObj(doc.paths)) throw new Error('the document has no paths');
     options = options || {};
-    var scope = options.environmentSource === 'external' ? 'external' : 'collection';
+    var scope = options.environmentSource === 'external' ? 'external'
+      : options.environmentSource === 'none' ? 'none' : 'collection';
+    if (scope === 'none' && options.captureToken) {
+      throw new Error('Token capture requires collection variables or an external environment');
+    }
     var server = Array.isArray(doc.servers) && doc.servers[0] && doc.servers[0].url
       ? doc.servers[0].url.replace(/\/$/, '') : 'http://localhost';
     var folders = {}; // tag -> items
@@ -261,7 +266,7 @@
       METHODS.forEach(function (method) {
         var op = item[method];
         if (!isObj(op)) return;
-        var reqItem = postmanRequest(doc, pathName, method, op, shared);
+        var reqItem = postmanRequest(doc, pathName, method, op, shared, scope === 'none' ? server : null);
         var tag = Array.isArray(op.tags) && op.tags.length ? String(op.tags[0]) : null;
         if (tag) {
           (folders[tag] = folders[tag] || []).push(reqItem);
@@ -285,7 +290,14 @@
       variable: scope === 'collection' ? [{ key: 'baseUrl', value: server, type: 'string' }] : []
     };
     var auth = postmanAuth(doc);
-    if (auth) collection.auth = auth;
+    if (auth) {
+      // Without a variable scope, leave credentials blank for manual input in Postman.
+      if (scope === 'none' && auth.type === 'bearer') auth.bearer[0].value = '';
+      if (scope === 'none' && auth.type === 'apikey') auth.apikey.forEach(function (entry) {
+        if (entry.key === 'value') entry.value = '';
+      });
+      collection.auth = auth;
+    }
     if (scope === 'collection') {
       if (auth && auth.type === 'bearer') collection.variable.push({ key: 'bearerToken', value: '', type: 'string' });
       if (auth && auth.type === 'apikey') collection.variable.push({ key: 'apiKey', value: '', type: 'string' });
@@ -385,6 +397,7 @@
     element('p', 'Choose the variable source and optionally capture a token from an API response.');
     field('Variable source');
     var source = select('sdui-postman-source', [
+      { value: 'none', label: 'No environment (direct URLs, no variables)' },
       { value: 'collection', label: 'Collection variables (embedded)' },
       { value: 'external', label: 'External Postman environment (.json)' }
     ]);
@@ -423,10 +436,16 @@
         || paths[0] || '';
     }
     function update() {
-      capture.hidden = !enabled.checked;
-      note.textContent = source.value === 'external'
-        ? 'Downloads a collection and a separate environment file. Import both and select the environment in Postman.'
-        : 'Variables are stored in the collection; no separate environment is required.';
+      var noEnvironment = source.value === 'none';
+      if (noEnvironment) enabled.checked = false;
+      enabled.disabled = noEnvironment;
+      checkLabel.style.opacity = noEnvironment ? '0.55' : '1';
+      capture.hidden = noEnvironment || !enabled.checked;
+      note.textContent = noEnvironment
+        ? 'Only the collection JSON is downloaded. Request URLs use the server URL directly; credentials can be entered manually in Postman.'
+        : source.value === 'external'
+          ? 'Downloads a collection and a separate environment file. Import both and select the environment in Postman.'
+          : 'Variables are stored in the collection; no separate environment is required.';
     }
     source.addEventListener('change', update);
     enabled.addEventListener('change', update);
@@ -466,7 +485,9 @@
         }
         status('ok', source.value === 'external'
           ? 'Postman collection and environment downloaded — import both and select the environment'
-          : 'Postman collection downloaded with embedded variables');
+          : source.value === 'none'
+            ? 'Postman collection downloaded without environment variables'
+            : 'Postman collection downloaded with embedded variables');
         close();
       } catch (error) {
         status('err', 'Postman export failed: ' + error.message);
