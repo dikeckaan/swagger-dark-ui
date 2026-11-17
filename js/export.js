@@ -394,12 +394,12 @@
     }
     var title = element('h2', 'Postman export settings');
     title.style.margin = '0 0 8px';
-    element('p', 'Choose the variable source and optionally capture a token from an API response.');
-    field('Variable source');
+    element('p', 'Choose how Postman requests read variables, then optionally capture a value from an API response.');
+    field('Environment / variable source');
     var source = select('sdui-postman-source', [
-      { value: 'none', label: 'No environment (direct URLs, no variables)' },
-      { value: 'collection', label: 'Collection variables (embedded)' },
-      { value: 'external', label: 'External Postman environment (.json)' }
+      { value: 'none', label: 'No environment — direct URLs' },
+      { value: 'collection', label: 'Use variables from collection' },
+      { value: 'external', label: 'Separate Postman environment (.json)' }
     ]);
     var note = element('p');
     note.style.cssText = 'font-size:12px;opacity:.8;margin-top:7px';
@@ -564,7 +564,7 @@
 
     var ACTIONS = [
       {
-        label: 'Postman collection (.json)',
+        label: 'Postman collection (.json) — environment settings…',
         run: function () {
           var doc = currentDoc();
           if (doc.swagger) throw new Error('convert the document to OpenAPI 3 first');
